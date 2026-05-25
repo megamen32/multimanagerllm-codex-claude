@@ -1,0 +1,4 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
+cd "$DIR"
+exec python3 "$DIR/app.py"
