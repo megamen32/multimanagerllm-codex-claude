@@ -574,10 +574,16 @@ function renderCxProfiles(data){
   profiles.sort((a,b)=>a.name.localeCompare(b.name))
   profiles.forEach(p=>{
     const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
+    const planInfo=p.plan?`<span class="tag" style="background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.3)">${esc(p.plan)}</span>`:''
+    const subInfo=p.subscription_until?`<span style="font-size:11px;color:var(--muted)">до ${esc(p.subscription_until)}</span>`:''
     const div=document.createElement('div');div.className='item'
     div.innerHTML=`<div class="info"><div class="name">${dot}${esc(p.name)}${p.model?' <span style="color:var(--muted)">— '+esc(p.model)+'</span>':''}</div>
-      <div class="path">${p.endpoint?'endpoint: '+esc(p.endpoint):p.email?'email: '+esc(p.email):''}</div></div>
+      <div class="path" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        ${planInfo} ${subInfo}
+        ${p.email?'<span style="font-size:11px;color:var(--muted)">'+esc(p.email)+'</span>':''}
+      </div></div>
       <div class="actions">
+        <button class="btn btn-sm warning" onclick="cxRename('${esc(p.name)}')" title="Переименовать">✎</button>
         ${act?'<span class="tag green">активен</span>':`<button class="btn btn-sm secondary" onclick="cxUse('${esc(p.name)}')">Switch</button>`}
         <button class="btn btn-sm red" onclick="cxDelete('${esc(p.name)}')">×</button>
       </div>`
@@ -592,6 +598,11 @@ async function cxSave(){
 }
 async function cxUse(name){setStatus('переключение...');await api('/api/cx-use',{name});cxRefresh();setStatus('готов')}
 async function cxDelete(name){if(!confirm('Удалить профиль Codex "'+name+'"?'))return;await api('/api/cx-delete',{name});cxRefresh()}
+async function cxRename(name){
+  const newName=prompt('Новое имя для профиля "'+name+'":',name)
+  if(!newName||newName===name)return
+  setStatus('переименование...');await api('/api/cx-rename',{name,new_name:newName});cxRefresh();setStatus('готов')
+}
 async function cxImportFromAuth(){
   setStatus('импорт...');const r=await api('/api/cx-import-auth')
   if(r.profiles) cxRefresh()
@@ -1159,6 +1170,44 @@ def get_current_cx_profile_name(cfg):
         if pdata.get("config_hash") == ch and pdata.get("auth_hash") == ah: return name
     return None
 
+def _decode_cx_plan(auth_raw):
+    if not auth_raw: return {}
+    try:
+        import base64
+        ad = json.loads(auth_raw)
+        id_token = ad.get("tokens", {}).get("id_token", "")
+        if not id_token: return {}
+        parts = id_token.split(".")
+        if len(parts) < 2: return {}
+        payload = parts[1]
+        pad = 4 - len(payload) % 4
+        if pad != 4: payload += "=" * pad
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+        auth_info = claims.get("https://api.openai.com/auth", claims.get("https://api.openai.com/auth", {}))
+        # openai claims may be nested differently
+        for key in claims:
+            if "auth" in key.lower() and isinstance(claims[key], dict):
+                auth_info = claims[key]
+                break
+        plan = auth_info.get("chatgpt_plan_type", "")
+        sub_until = auth_info.get("chatgpt_subscription_active_until", "")
+        sub_start = auth_info.get("chatgpt_subscription_active_start", "")
+        user_id = auth_info.get("chatgpt_user_id", "")
+        account_id = auth_info.get("chatgpt_account_id", "")
+        email = claims.get("email", "")
+        name = claims.get("name", "")
+        return {
+            "plan": plan,
+            "subscription_until": sub_until[:10] if sub_until else "",
+            "subscription_start": sub_start[:10] if sub_start else "",
+            "user_id": user_id,
+            "account_id": account_id,
+            "email": email,
+            "name": name,
+        }
+    except Exception:
+        return {}
+
 def get_cx_profiles_data(cfg):
     profiles = cfg.get("codex_profiles", {})
     current_name = get_current_cx_profile_name(cfg)
@@ -1167,7 +1216,15 @@ def get_cx_profiles_data(cfg):
     for name in sorted(profiles.keys()):
         pdata = profiles[name]
         active = bool(ch and ah and pdata.get("config_hash") == ch and pdata.get("auth_hash") == ah)
-        result["profiles"].append({"name": name, "active": active, "email": pdata.get("email", ""), "endpoint": pdata.get("endpoint", ""), "model": pdata.get("model", "")})
+        plan = _decode_cx_plan(pdata.get("auth", ""))
+        result["profiles"].append({
+            "name": name, "active": active,
+            "email": pdata.get("email", ""), "endpoint": pdata.get("endpoint", ""),
+            "model": pdata.get("model", ""),
+            "plan": plan.get("plan", ""),
+            "subscription_until": plan.get("subscription_until", ""),
+            "name_claim": plan.get("name", ""),
+        })
     return result
 
 # ---- Skills ----
@@ -1836,6 +1893,16 @@ class Handler(BaseHTTPRequestHandler):
             name = body.get("name", "").strip()
             cfg.get("codex_profiles", {}).pop(name, None)
             save_config(cfg); self._json({"message": f"Профиль '{name}' удалён"}); return
+
+        # CX rename
+        if u.path == "/api/cx-rename":
+            name = body.get("name", "").strip(); new_name = body.get("new_name", "").strip()
+            if not name or not new_name: return self._error("name and new_name required")
+            profiles = cfg.get("codex_profiles", {})
+            if name not in profiles: return self._error(f"Профиль '{name}' не найден")
+            if new_name in profiles: return self._error(f"Профиль '{new_name}' уже существует")
+            profiles[new_name] = profiles.pop(name)
+            save_config(cfg); self._json({"message": f"Профиль переименован в '{new_name}'"}); return
 
         # CX import from auth.json
         if u.path == "/api/cx-import-auth":
