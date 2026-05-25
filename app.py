@@ -126,6 +126,9 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
     <div class="dual">
       <div class="card">
         <h2><span class="status-dot green"></span>Claude Desktop</h2>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+          Профили хранятся в <code>~/.multimanager/config.json</code>
+        </p>
         <div class="row" style="margin-bottom:10px">
           <button class="btn btn-sm" onclick="cdSave()">Сохранить текущий</button>
           <button class="btn btn-sm secondary" onclick="cdRefresh()">Обновить</button>
@@ -135,6 +138,9 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
 
       <div class="card">
         <h2><span class="status-dot green"></span>Claude Code (CLI)</h2>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+          Пресеты хранятся в <code>~/.multimanager/config.json</code>
+        </p>
         <div class="row" style="margin-bottom:10px">
           <button class="btn btn-sm" onclick="ccSave()">Сохранить текущий как</button>
           <input id="ccNewName" type="text" placeholder="имя пресета" style="width:140px;display:inline-block;padding:6px 10px">
@@ -146,10 +152,15 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
 
     <div class="card">
       <h2><span class="status-dot yellow"></span>Codex</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+        Профили хранятся в <code>~/.multimanager/config.json</code>.
+        Можно импортировать аккаунты из <code>~/.codex/auth.json*</code>.
+      </p>
       <div class="row" style="margin-bottom:10px">
         <button class="btn btn-sm" onclick="cxSave()">Сохранить текущий как</button>
         <input id="cxNewName" type="text" placeholder="имя профиля" style="width:140px;display:inline-block;padding:6px 10px">
         <button class="btn btn-sm secondary" onclick="cxRefresh()">Обновить</button>
+        <button class="btn btn-sm green" onclick="cxImportFromAuth()">+ Из auth.json</button>
       </div>
       <div id="cxProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
     </div>
@@ -330,12 +341,21 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
   <div class="tab-content" id="tab-settings">
     <div class="dual">
       <div class="card">
-        <h2>Пути к конфигам</h2>
-        <div style="font-size:12px">
-          <div><label>Claude Desktop</label><code id="cfgCdPath" style="font-size:11px;word-break:break-all">...</code></div>
-          <div><label>Claude Code (CLI)</label><code id="cfgCcPath" style="font-size:11px;word-break:break-all">...</code></div>
-          <div><label>Codex</label><code id="cfgCxPath" style="font-size:11px;word-break:break-all">...</code></div>
+        <h2>Куда указывают пути</h2>
+        <div style="font-size:13px">
+          <div><b>Claude Desktop:</b> <code id="cfgCdPath"></code></div>
+          <div><b>Claude Code:</b> <code id="cfgCcPath"></code></div>
+          <div><b>Codex:</b> <code id="cfgCxPath"></code></div>
         </div>
+      </div>
+      <div class="card">
+        <h2>Хранилище MultiManager</h2>
+        <p style="font-size:13px;color:var(--muted)">
+          Все профили, пресеты, сцены и настройки хранятся в <code>~/.multimanager/config.json</code>.<br>
+          Бэкапы — в <code>~/.multimanager/backups/</code>.<br>
+          MultiManager не хранит копии ваших API-ключей отдельно — всё читается из конфигов инструментов.
+        </p>
+      </div>
       </div>
       <div class="card">
         <h2>Auto-backup</h2>
@@ -469,7 +489,12 @@ async function ccRefresh(){
 function renderCcPresets(data){
   const el=document.getElementById('ccPresets');el.innerHTML=''
   const presets=data.presets||[];const currentName=data.current||''
-  if(presets.length===0&&!data.current){el.innerHTML='<div class="empty-state">Нет пресетов</div>';return}
+  if(presets.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет пресетов</div>';return}
+  if(!currentName && presets.length>0){
+    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
+    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним сохранённым пресетом. Сохрани текущее состояние как пресет, чтобы не потерять.'
+    el.appendChild(info)
+  }
   presets.sort((a,b)=>a.name.localeCompare(b.name))
   presets.forEach(p=>{
     const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
@@ -540,7 +565,12 @@ async function cxRefresh(){
 function renderCxProfiles(data){
   const el=document.getElementById('cxProfiles');el.innerHTML=''
   const profiles=data.profiles||[];const currentName=data.current||''
-  if(profiles.length===0&&!data.current){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
+  if(profiles.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
+  if(!currentName && profiles.length>0){
+    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
+    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним профилем. Сохрани как профиль.'
+    el.appendChild(info)
+  }
   profiles.sort((a,b)=>a.name.localeCompare(b.name))
   profiles.forEach(p=>{
     const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
@@ -562,6 +592,11 @@ async function cxSave(){
 }
 async function cxUse(name){setStatus('переключение...');await api('/api/cx-use',{name});cxRefresh();setStatus('готов')}
 async function cxDelete(name){if(!confirm('Удалить профиль Codex "'+name+'"?'))return;await api('/api/cx-delete',{name});cxRefresh()}
+async function cxImportFromAuth(){
+  setStatus('импорт...');const r=await api('/api/cx-import-auth')
+  if(r.profiles) cxRefresh()
+  setStatus(r.error||`импортировано ${r.profiles||0} профилей`)
+}
 
 // ===== CODEX ENDPOINT =====
 async function cxEndpointStatus(){
@@ -1801,6 +1836,56 @@ class Handler(BaseHTTPRequestHandler):
             name = body.get("name", "").strip()
             cfg.get("codex_profiles", {}).pop(name, None)
             save_config(cfg); self._json({"message": f"Профиль '{name}' удалён"}); return
+
+        # CX import from auth.json
+        if u.path == "/api/cx-import-auth":
+            import glob
+            auth_dir = HOME / ".codex"
+            auth_files = sorted(glob.glob(str(auth_dir / "auth.json*")))
+            imported = 0
+            profiles = cfg.setdefault("codex_profiles", {})
+            for af in auth_files:
+                afp = Path(af)
+                try:
+                    auth_raw = afp.read_text()
+                    auth_data = json.loads(auth_raw)
+                    # derive name from filename
+                    stem = afp.stem  # auth.json or auth.json.hdfa -> auth, auth.json
+                    parts = stem.replace("auth.json", "", 1).strip(".") or "default"
+                    profile_name = f"auth-{parts}" if parts != "default" else "auth-default"
+                    if profile_name in profiles:
+                        continue
+                    email = ""
+                    id_token = auth_data.get("tokens", {}).get("id_token", "")
+                    if id_token:
+                        import base64
+                        jwt_parts = id_token.split(".")
+                        if len(jwt_parts) > 1:
+                            payload = jwt_parts[1]
+                            pad = 4 - len(payload) % 4
+                            if pad != 4: payload += "=" * pad
+                            claims = json.loads(base64.urlsafe_b64decode(payload))
+                            email = claims.get("email", "")
+                    # read current config.toml
+                    config_text = read_file_text(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
+                    ch = file_hash(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
+                    ah = file_hash(afp)
+                    model = ""
+                    if config_text:
+                        for line in config_text.splitlines():
+                            if line.startswith("model"):
+                                model = line.split("=")[-1].strip().strip('" ')
+                    profiles[profile_name] = {
+                        "config_hash": ch, "auth_hash": ah,
+                        "config": config_text, "auth": auth_raw,
+                        "email": email, "model": model,
+                        "endpoint": cfg.get("codex_endpoint", ""),
+                    }
+                    imported += 1
+                except Exception:
+                    pass
+            save_config(cfg)
+            self._json({"profiles": imported, "message": f"Импортировано {imported} профилей"}); return
 
         # CX endpoint
         if u.path == "/api/cx-set-endpoint":

@@ -116,6 +116,8 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
     <div class="tab" data-tab="scenes">Сцены</div>
     <div class="tab" data-tab="skills">Skills</div>
     <div class="tab" data-tab="codex-endpoint">Codex endpoint</div>
+    <div class="tab" data-tab="mcp">MCP</div>
+    <div class="tab" data-tab="plugins">Плагины</div>
     <div class="tab" data-tab="settings">Настройки</div>
   </div>
 
@@ -124,6 +126,9 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
     <div class="dual">
       <div class="card">
         <h2><span class="status-dot green"></span>Claude Desktop</h2>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+          Профили хранятся в <code>~/.multimanager/config.json</code>
+        </p>
         <div class="row" style="margin-bottom:10px">
           <button class="btn btn-sm" onclick="cdSave()">Сохранить текущий</button>
           <button class="btn btn-sm secondary" onclick="cdRefresh()">Обновить</button>
@@ -133,6 +138,9 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
 
       <div class="card">
         <h2><span class="status-dot green"></span>Claude Code (CLI)</h2>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+          Пресеты хранятся в <code>~/.multimanager/config.json</code>
+        </p>
         <div class="row" style="margin-bottom:10px">
           <button class="btn btn-sm" onclick="ccSave()">Сохранить текущий как</button>
           <input id="ccNewName" type="text" placeholder="имя пресета" style="width:140px;display:inline-block;padding:6px 10px">
@@ -144,10 +152,15 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
 
     <div class="card">
       <h2><span class="status-dot yellow"></span>Codex</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+        Профили хранятся в <code>~/.multimanager/config.json</code>.
+        Можно импортировать аккаунты из <code>~/.codex/auth.json*</code>.
+      </p>
       <div class="row" style="margin-bottom:10px">
         <button class="btn btn-sm" onclick="cxSave()">Сохранить текущий как</button>
         <input id="cxNewName" type="text" placeholder="имя профиля" style="width:140px;display:inline-block;padding:6px 10px">
         <button class="btn btn-sm secondary" onclick="cxRefresh()">Обновить</button>
+        <button class="btn btn-sm green" onclick="cxImportFromAuth()">+ Из auth.json</button>
       </div>
       <div id="cxProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
     </div>
@@ -265,16 +278,84 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
     </div>
   </div>
 
+  <!-- ========== TAB: MCP ========== -->
+  <div class="tab-content" id="tab-mcp">
+    <div class="card">
+      <h2>MCP Серверы</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">
+        Все MCP серверы из Claude Desktop, Claude Code и Codex. Можно добавлять, отключать, удалять.
+      </p>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn" onclick="mcpRefresh()">Обновить</button>
+        <button class="btn secondary" onclick="mcpShowAdd()">+ Добавить MCP</button>
+      </div>
+      <div id="mcpAddForm" style="display:none;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div class="dual">
+          <div><label>Инструмент</label><select id="mcpAddTool" style="margin-bottom:8px"></select></div>
+          <div><label>Имя сервера</label><input id="mcpAddName" type="text" placeholder="my-server"></div>
+        </div>
+        <div class="dual">
+          <div><label>Тип</label><select id="mcpAddType"><option value="stdio">stdio</option><option value="http">HTTP</option></select></div>
+          <div id="mcpAddStdioFields"><label>Команда</label><input id="mcpAddCommand" type="text" placeholder="npx"></div>
+          <div id="mcpAddUrlField" style="display:none"><label>URL</label><input id="mcpAddUrl" type="url" placeholder="https://..."></div>
+        </div>
+        <label>Аргументы (через запятую или каждый на новой строке)</label>
+        <textarea id="mcpAddArgs" rows="2" placeholder="-y, package@latest"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button class="btn green" onclick="mcpAdd()">Добавить</button>
+          <button class="btn secondary" onclick="mcpHideAdd()">Отмена</button>
+        </div>
+      </div>
+      <div id="mcpList" class="list"><div class="empty-state">Загрузка...</div></div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: PLUGINS ========== -->
+  <div class="tab-content" id="tab-plugins">
+    <div class="dual">
+      <div class="card">
+        <h2>Claude Code Плагины</h2>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Плагины из <code>~/.claude/settings.json</code></p>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn btn-sm" onclick="plCcRefresh()">Обновить</button>
+        </div>
+        <div id="plCcList" class="list"><div class="empty-state">Загрузка...</div></div>
+      </div>
+      <div class="card">
+        <h2>Codex Плагины</h2>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Плагины из <code>~/.codex/config.toml</code></p>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn btn-sm" onclick="plCxRefresh()">Обновить</button>
+        </div>
+        <div id="plCxList" class="list"><div class="empty-state">Загрузка...</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Plugin Marketplaces (Claude Code)</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Зарегистрированные marketplace-и для Claude Code плагинов.</p>
+      <div id="plMarketplaces" class="list"><div class="empty-state">Загрузка...</div></div>
+    </div>
+  </div>
+
   <!-- ========== TAB: SETTINGS ========== -->
   <div class="tab-content" id="tab-settings">
     <div class="dual">
       <div class="card">
-        <h2>Пути к конфигам</h2>
-        <div style="font-size:12px">
-          <div><label>Claude Desktop</label><code id="cfgCdPath" style="font-size:11px;word-break:break-all">...</code></div>
-          <div><label>Claude Code (CLI)</label><code id="cfgCcPath" style="font-size:11px;word-break:break-all">...</code></div>
-          <div><label>Codex</label><code id="cfgCxPath" style="font-size:11px;word-break:break-all">...</code></div>
+        <h2>Куда указывают пути</h2>
+        <div style="font-size:13px">
+          <div><b>Claude Desktop:</b> <code id="cfgCdPath"></code></div>
+          <div><b>Claude Code:</b> <code id="cfgCcPath"></code></div>
+          <div><b>Codex:</b> <code id="cfgCxPath"></code></div>
         </div>
+      </div>
+      <div class="card">
+        <h2>Хранилище MultiManager</h2>
+        <p style="font-size:13px;color:var(--muted)">
+          Все профили, пресеты, сцены и настройки хранятся в <code>~/.multimanager/config.json</code>.<br>
+          Бэкапы — в <code>~/.multimanager/backups/</code>.<br>
+          MultiManager не хранит копии ваших API-ключей отдельно — всё читается из конфигов инструментов.
+        </p>
+      </div>
       </div>
       <div class="card">
         <h2>Auto-backup</h2>
@@ -350,7 +431,10 @@ document.querySelectorAll('.tab').forEach(tab=>{
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'))
     document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'))
     tab.classList.add('active')
-    document.getElementById('tab-'+tab.dataset.tab).classList.add('active')
+    const t=tab.dataset.tab
+    document.getElementById('tab-'+t).classList.add('active')
+    if(t==='mcp')mcpRefresh()
+    if(t==='plugins'){plCcRefresh();plCxRefresh()}
   })
 })
 
@@ -405,7 +489,12 @@ async function ccRefresh(){
 function renderCcPresets(data){
   const el=document.getElementById('ccPresets');el.innerHTML=''
   const presets=data.presets||[];const currentName=data.current||''
-  if(presets.length===0&&!data.current){el.innerHTML='<div class="empty-state">Нет пресетов</div>';return}
+  if(presets.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет пресетов</div>';return}
+  if(!currentName && presets.length>0){
+    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
+    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним сохранённым пресетом. Сохрани текущее состояние как пресет, чтобы не потерять.'
+    el.appendChild(info)
+  }
   presets.sort((a,b)=>a.name.localeCompare(b.name))
   presets.forEach(p=>{
     const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
@@ -476,7 +565,12 @@ async function cxRefresh(){
 function renderCxProfiles(data){
   const el=document.getElementById('cxProfiles');el.innerHTML=''
   const profiles=data.profiles||[];const currentName=data.current||''
-  if(profiles.length===0&&!data.current){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
+  if(profiles.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
+  if(!currentName && profiles.length>0){
+    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
+    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним профилем. Сохрани как профиль.'
+    el.appendChild(info)
+  }
   profiles.sort((a,b)=>a.name.localeCompare(b.name))
   profiles.forEach(p=>{
     const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
@@ -498,6 +592,11 @@ async function cxSave(){
 }
 async function cxUse(name){setStatus('переключение...');await api('/api/cx-use',{name});cxRefresh();setStatus('готов')}
 async function cxDelete(name){if(!confirm('Удалить профиль Codex "'+name+'"?'))return;await api('/api/cx-delete',{name});cxRefresh()}
+async function cxImportFromAuth(){
+  setStatus('импорт...');const r=await api('/api/cx-import-auth')
+  if(r.profiles) cxRefresh()
+  setStatus(r.error||`импортировано ${r.profiles||0} профилей`)
+}
 
 // ===== CODEX ENDPOINT =====
 async function cxEndpointStatus(){
@@ -680,6 +779,127 @@ function renderCdData(data){
     })
     el.appendChild(div)
   })
+}
+
+// ===== MCP MANAGEMENT =====
+async function mcpRefresh(){
+  setStatus('загрузка...');const data=await api('/api/mcp-list');renderMcp(data);setStatus('готов')
+}
+function renderMcp(data){
+  const el=document.getElementById('mcpList');el.innerHTML=''
+  const servers=data.servers||[]
+  if(!servers.length){el.innerHTML='<div class="empty-state">Нет MCP серверов</div>';return}
+  const groups={}
+  servers.forEach(s=>{
+    const key=s.source+'|'+s.instance
+    if(!groups[key])groups[key]=[]
+    groups[key].push(s)
+  })
+  Object.entries(groups).forEach(([key,items])=>{
+    const first=items[0]
+    const groupDiv=document.createElement('div');groupDiv.style.marginBottom='8px';groupDiv.style.border='1px solid var(--border)';groupDiv.style.borderRadius='12px';groupDiv.style.padding='8px 12px'
+    const header=document.createElement('div');header.style.display='flex';header.style.justifyContent='space-between';header.style.alignItems='center';header.style.marginBottom='6px'
+    header.innerHTML=`<span style="font-weight:600;font-size:13px">${esc(first.sourceIcon)} ${esc(first.source)}${first.instance?' — '+esc(first.instance):''}</span><span style="font-size:11px;color:var(--muted)">${items.length} серверов</span>`
+    groupDiv.appendChild(header)
+    items.forEach(s=>{
+      const cmd=s.type==='http'?s.url:(s.command+(s.args&&s.args.length?' '+esc(s.args.join(' ')):''))
+      const item=document.createElement('div');item.style.display='flex';item.style.justifyContent='space-between';item.style.alignItems='center';item.style.padding='4px 0';item.style.borderBottom='1px solid rgba(255,255,255,.04)'
+      item.innerHTML=`<div><span style="font-weight:600;font-size:13px">${esc(s.name)}</span><span style="font-size:11px;color:var(--muted);margin-left:8px">${s.type||'stdio'}</span>
+        <div style="font-size:11px;color:var(--muted)">${esc(cmd.substr(0,80))}${cmd.length>80?'…':''}</div></div>
+        <div class="actions" style="gap:4px">
+          ${s.source==='Codex'?`<button class="btn btn-sm ${s.enabled?'green':'secondary'}" onclick="mcpToggle('${esc(s.name)}','${esc(s.source)}','${esc(s.instance||'')}')">${s.enabled?'ON':'OFF'}</button>`:''}
+          <button class="btn btn-sm red" onclick="mcpDelete('${esc(s.name)}','${esc(s.source)}','${esc(s.instance||'')}')">×</button>
+        </div>`
+      groupDiv.appendChild(item)
+    })
+    el.appendChild(groupDiv)
+  })
+  // Populate add form tool selector
+  const sel=document.getElementById('mcpAddTool');sel.innerHTML=''
+  data.tools.forEach(t=>{
+    const opt=document.createElement('option');opt.value=t.key;opt.textContent=t.label;sel.appendChild(opt)
+  })
+}
+function mcpShowAdd(){document.getElementById('mcpAddForm').style.display='block'}
+function mcpHideAdd(){document.getElementById('mcpAddForm').style.display='none'}
+document.addEventListener('change',function(e){
+  if(e.target.id==='mcpAddType'){
+    const isHttp=e.target.value==='http'
+    document.getElementById('mcpAddStdioFields').style.display=isHttp?'none':'block'
+    document.getElementById('mcpAddUrlField').style.display=isHttp?'block':'none'
+  }
+})
+async function mcpAdd(){
+  const tool=document.getElementById('mcpAddTool').value
+  const name=document.getElementById('mcpAddName').value.trim()
+  const type=document.getElementById('mcpAddType').value
+  const command=document.getElementById('mcpAddCommand').value.trim()
+  const url=document.getElementById('mcpAddUrl').value.trim()
+  const argsRaw=document.getElementById('mcpAddArgs').value
+  if(!name||(type==='stdio'&&!command)||(type==='http'&&!url)){alert('Заполни обязательные поля');return}
+  const args=argsRaw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean)
+  setStatus('добавление...')
+  const data=await api('/api/mcp-add',{tool,name,type,command,args,url})
+  mcpRefresh();setStatus(data.error||'готов')
+  if(!data.error)mcpHideAdd()
+}
+async function mcpDelete(name,source,instance){
+  if(!confirm('Удалить MCP "'+name+'" из '+source+(instance?' ('+instance+')':'')+'?'))return
+  setStatus('удаление...');await api('/api/mcp-delete',{name,source,instance});mcpRefresh();setStatus('готов')
+}
+async function mcpToggle(name,source,instance){
+  setStatus('переключение...');await api('/api/mcp-toggle',{name,source,instance});mcpRefresh();setStatus('готов')
+}
+
+// ===== PLUGINS =====
+async function plCcRefresh(){
+  setStatus('загрузка...');const data=await api('/api/plugins-cc');renderPlCc(data);setStatus('готов')
+}
+function renderPlCc(data){
+  const el=document.getElementById('plCcList');el.innerHTML=''
+  const plugins=data.plugins||[]
+  if(!plugins.length){el.innerHTML='<div class="empty-state">Нет плагинов</div>';return}
+  plugins.forEach(p=>{
+    const div=document.createElement('div');div.className='item'
+    div.innerHTML=`<div class="info"><div class="name">${p.enabled?'<span class="status-dot green"></span>':'<span class="status-dot"></span>'}${esc(p.name)}</div>
+      <div class="path">${p.marketplace||''}</div></div>
+      <div class="actions">
+        <button class="btn btn-sm ${p.enabled?'green':'secondary'}" onclick="plCcToggle('${esc(p.name)}')">${p.enabled?'ON':'OFF'}</button>
+      </div>`
+    el.appendChild(div)
+  })
+  // Marketplaces
+  const mel=document.getElementById('plMarketplaces');mel.innerHTML=''
+  const mps=data.marketplaces||[]
+  if(mps.length){
+    mps.forEach(m=>{
+      const d=document.createElement('div');d.className='item'
+      d.innerHTML=`<div class="info"><div class="name">${esc(m.name)}</div><div class="path">${esc(m.source||'')}</div></div>`
+      mel.appendChild(d)
+    })
+  }else{mel.innerHTML='<div class="empty-state">Нет marketplace-ов</div>'}
+}
+async function plCcToggle(name){
+  setStatus('переключение...');await api('/api/plugins-cc-toggle',{name});plCcRefresh();setStatus('готов')
+}
+async function plCxRefresh(){setStatus('загрузка...')
+  const data=await api('/api/plugins-cx');renderPlCx(data);setStatus('готов')
+}
+function renderPlCx(data){
+  const el=document.getElementById('plCxList');el.innerHTML=''
+  const plugins=data.plugins||[]
+  if(!plugins.length){el.innerHTML='<div class="empty-state">Нет плагинов</div>';return}
+  plugins.forEach(p=>{
+    const div=document.createElement('div');div.className='item'
+    div.innerHTML=`<div class="info"><div class="name">${p.enabled?'<span class="status-dot green"></span>':'<span class="status-dot"></span>'}${esc(p.name)}</div></div>
+      <div class="actions">
+        <button class="btn btn-sm green" onclick="plCxToggle('${esc(p.name)}')">Toggle</button>
+      </div>`
+    el.appendChild(div)
+  })
+}
+async function plCxToggle(name){
+  setStatus('переключение...');await api('/api/plugins-cx-toggle',{name});plCxRefresh();setStatus('готов')
 }
 
 // ===== UTILS =====
@@ -1094,6 +1314,343 @@ def restore_backup(name):
         except Exception as e: restored.append(f"{key}: ERROR {e}")
     return True, "\n".join(restored)
 
+# ---- MCP Helpers ----
+CODEX_MCP_INI = CODEX_CONFIG
+
+def _mcp_source_label(key, tool_label=None):
+    parts = key.split("|", 1)
+    if tool_label:
+        return tool_label
+    return parts[0]
+
+def _read_cdx_mcp_servers():
+    """Read MCP servers from Codex config.toml (mcp_servers section)."""
+    if not CODEX_CONFIG.exists():
+        return {}
+    raw = CODEX_CONFIG.read_text()
+    try:
+        import tomllib
+        data = tomllib.loads(raw)
+    except Exception:
+        return {}
+    servers = {}
+    sec = data.get("mcp_servers", {})
+    for name, val in sec.items():
+        if isinstance(val, dict):
+            servers[name] = {
+                "command": val.get("command", ""),
+                "args": val.get("args", []),
+                "type": "http" if "url" in val else "stdio",
+                "url": val.get("url", ""),
+                "enabled": val.get("enabled", True),
+                "headers": val.get("headers", {}),
+            }
+    return servers
+
+def _write_cdx_mcp_servers(servers):
+    """Write MCP servers back into Codex config.toml."""
+    if not CODEX_CONFIG.exists():
+        return False, "Codex config not found"
+    raw = CODEX_CONFIG.read_text()
+    lines = raw.split("\n")
+    new_lines = []
+    in_servers = False
+    server_keys = set(servers.keys())
+    wrote = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        # Detect start of mcp_servers section
+        if stripped.startswith("[mcp_servers."):
+            in_servers = True
+            key = stripped[len("[mcp_servers."):].rstrip("]")
+            # Skip this server section entirely; we'll rewrite all
+            while i < len(lines) and not (lines[i].strip().startswith("[") and lines[i].strip() != stripped and not lines[i].strip().startswith("[mcp_servers.")):
+                i += 1
+            i -= 1  # will be incremented
+        elif in_servers and stripped.startswith("[") and not stripped.startswith("[mcp_servers."):
+            in_servers = False
+            if not wrote:
+                # Write all servers before leaving section
+                for srv_name, srv in sorted(servers.items()):
+                    new_lines.append(f"\n[mcp_servers.{srv_name}]")
+                    if srv.get("type") == "http":
+                        new_lines.append(f'url = "{srv["url"]}"')
+                    else:
+                        new_lines.append(f'command = "{srv["command"]}"')
+                        if srv.get("args"):
+                            if len(srv["args"]) == 1:
+                                new_lines.append(f'args = ["{srv["args"][0]}"]')
+                            else:
+                                new_lines.append(f"args = [")
+                                for a in srv["args"]:
+                                    new_lines.append(f'  "{a}",')
+                                new_lines.append(f"]")
+                    if "enabled" in srv and not srv["enabled"]:
+                        new_lines.append("enabled = false")
+                    if srv.get("headers"):
+                        new_lines.append("[mcp_servers." + srv_name + ".headers]")
+                        for k, v in srv.get("headers", {}).items():
+                            new_lines.append(f'{k} = "{v}"')
+                wrote = True
+        if not in_servers or i >= len(lines):
+            new_lines.append(line)
+        elif in_servers and i >= len(lines):
+            pass
+        i += 1
+    if not wrote:
+        new_lines.append("\n")
+        for srv_name, srv in sorted(servers.items()):
+            new_lines.append(f"\n[mcp_servers.{srv_name}]")
+            if srv.get("type") == "http":
+                new_lines.append(f'url = "{srv["url"]}"')
+            else:
+                new_lines.append(f'command = "{srv["command"]}"')
+                if srv.get("args"):
+                    if len(srv["args"]) == 1:
+                        new_lines.append(f'args = ["{srv["args"][0]}"]')
+                    else:
+                        new_lines.append(f"args = [")
+                        for a in srv["args"]:
+                            new_lines.append(f'  "{a}",')
+                        new_lines.append(f"]")
+            if "enabled" in srv and not srv["enabled"]:
+                new_lines.append("enabled = false")
+    CODEX_CONFIG.write_text("\n".join(new_lines))
+    return True, "OK"
+
+def mcp_list_servers(cfg):
+    servers = []
+    tools = []
+    tool_keys = set()
+    def add_source(label, key, icon="🖥"):
+        if key not in tool_keys:
+            tools.append({"key": key, "label": f"{icon} {label}"})
+            tool_keys.add(key)
+
+    # Claude Desktop instances
+    for inst in get_cd_profiles_data(cfg)["instances"]:
+        name = inst["name"]
+        config_path = CLAUDE_DESKTOP_DIR / name / "claude_desktop_config.json"
+        add_source(f"Claude Desktop — {name}", f"cd|{name}", "💬")
+        if config_path.exists():
+            try:
+                d = json.loads(config_path.read_text())
+                mcp = d.get("mcpServers", {})
+                for srv_name, srv in mcp.items():
+                    servers.append({
+                        "name": srv_name,
+                        "source": "Claude Desktop",
+                        "sourceIcon": "💬",
+                        "instance": name,
+                        "key": f"cd|{name}",
+                        "type": "http" if "url" in srv else "stdio",
+                        "command": srv.get("command", ""),
+                        "args": srv.get("args", []),
+                        "url": srv.get("url", ""),
+                        "enabled": True,
+                    })
+            except Exception:
+                pass
+
+    # Claude Code
+    add_source("Claude Code", "cc", "⌨️")
+    if CLAUDE_CODE_SETTINGS.exists():
+        try:
+            d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+            mcp = d.get("mcpServers", {})
+            for srv_name, srv in mcp.items():
+                servers.append({
+                    "name": srv_name,
+                    "source": "Claude Code",
+                    "sourceIcon": "⌨️",
+                    "instance": "",
+                    "key": "cc",
+                    "type": srv.get("type", "stdio"),
+                    "command": srv.get("command", ""),
+                    "args": srv.get("args", []),
+                    "url": srv.get("url", ""),
+                    "enabled": True,
+                    "headers": srv.get("headers", {}),
+                })
+        except Exception:
+            pass
+
+    # Codex
+    add_source("Codex", "cx", "🤖")
+    cdx = _read_cdx_mcp_servers()
+    for srv_name, srv in cdx.items():
+        servers.append({
+            "name": srv_name,
+            "source": "Codex",
+            "sourceIcon": "🤖",
+            "instance": "",
+            "key": "cx",
+            "type": srv.get("type", "stdio"),
+            "command": srv.get("command", ""),
+            "args": srv.get("args", []),
+            "url": srv.get("url", ""),
+            "enabled": srv.get("enabled", True),
+        })
+
+    return {"servers": servers, "tools": tools}
+
+def mcp_add_server(tool_key, name, srv_type, command, args, url):
+    if tool_key.startswith("cd|"):
+        inst = tool_key.split("|", 1)[1]
+        config_path = CLAUDE_DESKTOP_DIR / inst / "claude_desktop_config.json"
+        if not config_path.exists():
+            return False, f"Config not found for {inst}"
+        d = json.loads(config_path.read_text())
+        if "mcpServers" not in d:
+            d["mcpServers"] = {}
+        if srv_type == "http":
+            d["mcpServers"][name] = {"url": url, "type": "http"}
+        else:
+            d["mcpServers"][name] = {"command": command, "args": args}
+        config_path.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+        return True, "OK"
+    elif tool_key == "cc":
+        if not CLAUDE_CODE_SETTINGS.exists():
+            return False, "Claude Code settings not found"
+        d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+        if "mcpServers" not in d:
+            d["mcpServers"] = {}
+        if srv_type == "http":
+            d["mcpServers"][name] = {"url": url, "type": "http"}
+        else:
+            d["mcpServers"][name] = {"command": command, "args": args}
+        CLAUDE_CODE_SETTINGS.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+        return True, "OK"
+    elif tool_key == "cx":
+        servers = _read_cdx_mcp_servers()
+        if srv_type == "http":
+            servers[name] = {"command": "", "args": [], "type": "http", "url": url, "enabled": True}
+        else:
+            servers[name] = {"command": command, "args": args, "type": "stdio", "url": "", "enabled": True}
+        ok, msg = _write_cdx_mcp_servers(servers)
+        return ok, msg
+    return False, "Unknown tool"
+
+def mcp_delete_server(name, source, instance):
+    if source == "Claude Desktop":
+        config_path = CLAUDE_DESKTOP_DIR / instance / "claude_desktop_config.json"
+        if not config_path.exists():
+            return False, "Config not found"
+        d = json.loads(config_path.read_text())
+        d.get("mcpServers", {}).pop(name, None)
+        config_path.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+        return True, "OK"
+    elif source == "Claude Code":
+        if not CLAUDE_CODE_SETTINGS.exists():
+            return False, "Settings not found"
+        d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+        d.get("mcpServers", {}).pop(name, None)
+        CLAUDE_CODE_SETTINGS.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+        return True, "OK"
+    elif source == "Codex":
+        servers = _read_cdx_mcp_servers()
+        servers.pop(name, None)
+        ok, msg = _write_cdx_mcp_servers(servers)
+        return ok, msg
+    return False, "Unknown source"
+
+def mcp_toggle_server(name, source, instance):
+    if source == "Codex":
+        servers = _read_cdx_mcp_servers()
+        if name in servers:
+            servers[name]["enabled"] = not servers[name].get("enabled", True)
+            ok, msg = _write_cdx_mcp_servers(servers)
+            return ok, msg
+        return False, "Not found"
+    return False, "Toggle only supported for Codex"
+
+# ---- Plugins Helpers ----
+def plugins_cc_list():
+    if not CLAUDE_CODE_SETTINGS.exists():
+        return {"plugins": [], "marketplaces": []}
+    d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+    plugins = []
+    eps = d.get("enabledPlugins", {})
+    for name, enabled in eps.items():
+        plugins.append({"name": name, "enabled": enabled, "source": "claude_code"})
+    marketplaces = []
+    ekm = d.get("extraKnownMarketplaces", {})
+    for name, val in ekm.items():
+        src = val.get("source", {})
+        if isinstance(src, dict):
+            marketplaces.append({"name": name, "source": src.get("path", str(src))})
+        else:
+            marketplaces.append({"name": name, "source": str(src)})
+    return {"plugins": plugins, "marketplaces": marketplaces}
+
+def plugins_cc_toggle(name):
+    if not CLAUDE_CODE_SETTINGS.exists():
+        return False, "Settings not found"
+    d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+    eps = d.setdefault("enabledPlugins", {})
+    if name in eps:
+        eps[name] = not eps[name]
+    else:
+        eps[name] = True
+    CLAUDE_CODE_SETTINGS.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    return True, "OK"
+
+def plugins_cx_list():
+    if not CODEX_CONFIG.exists():
+        return {"plugins": []}
+    raw = CODEX_CONFIG.read_text()
+    try:
+        import tomllib
+        data = tomllib.loads(raw)
+    except Exception:
+        return {"plugins": []}
+    plugins = []
+    sec = data.get("plugins", {})
+    for name, val in sec.items():
+        if isinstance(val, dict):
+            plugins.append({"name": name, "enabled": val.get("enabled", True), "source": "codex"})
+    return {"plugins": plugins}
+
+def plugins_cx_toggle(name):
+    # Read full config and toggle plugin
+    if not CODEX_CONFIG.exists():
+        return False, "Config not found"
+    raw = CODEX_CONFIG.read_text()
+    import tomllib
+    data = tomllib.loads(raw)
+    plugins = data.get("plugins", {})
+    if name not in plugins:
+        return False, "Plugin not found"
+    current = plugins[name].get("enabled", True)
+    # Toggle via raw text manipulation
+    target = f"[plugins.{name}]"
+    lines = raw.split("\n")
+    new_lines = []
+    in_plugin = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == target:
+            in_plugin = True
+            new_lines.append(line)
+        elif in_plugin and stripped.startswith("["):
+            # Write the toggled enabled line before leaving
+            new_lines.append(f"enabled = {'false' if current else 'true'}")
+            new_lines.append(line)
+            in_plugin = False
+        elif in_plugin and stripped.startswith("enabled"):
+            continue  # skip old enabled line
+        else:
+            if in_plugin:
+                new_lines.append(line)
+            else:
+                new_lines.append(line)
+    if in_plugin:
+        new_lines.append(f"enabled = {'false' if current else 'true'}")
+    CODEX_CONFIG.write_text("\n".join(new_lines))
+    return True, "OK"
+
 # ============================================================
 # HTTP HANDLER
 # ============================================================
@@ -1155,6 +1712,11 @@ class Handler(BaseHTTPRequestHandler):
         if u.path in ("/api/cd-config-path",): self._json({"path": str(CLAUDE_DESKTOP_DIR)}); return
         if u.path in ("/api/cc-config-path",): self._json({"path": str(CLAUDE_CODE_SETTINGS)}); return
         if u.path in ("/api/cx-config-path",): self._json({"path": str(CODEX_CONFIG)}); return
+
+        # MCP & Plugins GET endpoints
+        if u.path == "/api/mcp-list": self._json(mcp_list_servers(cfg)); return
+        if u.path == "/api/plugins-cc": self._json(plugins_cc_list()); return
+        if u.path == "/api/plugins-cx": self._json(plugins_cx_list()); return
 
         self.send_error(404)
 
@@ -1274,6 +1836,56 @@ class Handler(BaseHTTPRequestHandler):
             name = body.get("name", "").strip()
             cfg.get("codex_profiles", {}).pop(name, None)
             save_config(cfg); self._json({"message": f"Профиль '{name}' удалён"}); return
+
+        # CX import from auth.json
+        if u.path == "/api/cx-import-auth":
+            import glob
+            auth_dir = HOME / ".codex"
+            auth_files = sorted(glob.glob(str(auth_dir / "auth.json*")))
+            imported = 0
+            profiles = cfg.setdefault("codex_profiles", {})
+            for af in auth_files:
+                afp = Path(af)
+                try:
+                    auth_raw = afp.read_text()
+                    auth_data = json.loads(auth_raw)
+                    # derive name from filename
+                    stem = afp.stem  # auth.json or auth.json.hdfa -> auth, auth.json
+                    parts = stem.replace("auth.json", "", 1).strip(".") or "default"
+                    profile_name = f"auth-{parts}" if parts != "default" else "auth-default"
+                    if profile_name in profiles:
+                        continue
+                    email = ""
+                    id_token = auth_data.get("tokens", {}).get("id_token", "")
+                    if id_token:
+                        import base64
+                        jwt_parts = id_token.split(".")
+                        if len(jwt_parts) > 1:
+                            payload = jwt_parts[1]
+                            pad = 4 - len(payload) % 4
+                            if pad != 4: payload += "=" * pad
+                            claims = json.loads(base64.urlsafe_b64decode(payload))
+                            email = claims.get("email", "")
+                    # read current config.toml
+                    config_text = read_file_text(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
+                    ch = file_hash(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
+                    ah = file_hash(afp)
+                    model = ""
+                    if config_text:
+                        for line in config_text.splitlines():
+                            if line.startswith("model"):
+                                model = line.split("=")[-1].strip().strip('" ')
+                    profiles[profile_name] = {
+                        "config_hash": ch, "auth_hash": ah,
+                        "config": config_text, "auth": auth_raw,
+                        "email": email, "model": model,
+                        "endpoint": cfg.get("codex_endpoint", ""),
+                    }
+                    imported += 1
+                except Exception:
+                    pass
+            save_config(cfg)
+            self._json({"profiles": imported, "message": f"Импортировано {imported} профилей"}); return
 
         # CX endpoint
         if u.path == "/api/cx-set-endpoint":
@@ -1421,6 +2033,39 @@ class Handler(BaseHTTPRequestHandler):
             if not from_name or not to_name: return self._error("from and to required")
             ok, msg = copy_cd_data(from_name, to_name, databases)
             self._json({"ok": ok, "message": msg}); return
+
+        # MCP add
+        if u.path == "/api/mcp-add":
+            name = body.get("name", ""); tool = body.get("tool", "")
+            srv_type = body.get("type", "stdio"); command = body.get("command", "")
+            args = body.get("args", []); url = body.get("url", "")
+            if not name or not tool: return self._error("name and tool required")
+            ok, msg = mcp_add_server(tool, name, srv_type, command, args, url)
+            self._json({"ok": ok, "error": None if ok else msg}); return
+
+        # MCP delete
+        if u.path == "/api/mcp-delete":
+            name = body.get("name", ""); source = body.get("source", ""); instance = body.get("instance", "")
+            ok, msg = mcp_delete_server(name, source, instance)
+            self._json({"ok": ok, "error": None if ok else msg}); return
+
+        # MCP toggle
+        if u.path == "/api/mcp-toggle":
+            name = body.get("name", ""); source = body.get("source", ""); instance = body.get("instance", "")
+            ok, msg = mcp_toggle_server(name, source, instance)
+            self._json({"ok": ok, "error": None if ok else msg}); return
+
+        # Plugins CC toggle
+        if u.path == "/api/plugins-cc-toggle":
+            name = body.get("name", "")
+            ok, msg = plugins_cc_toggle(name)
+            self._json({"ok": ok, "error": None if ok else msg}); return
+
+        # Plugins CX toggle
+        if u.path == "/api/plugins-cx-toggle":
+            name = body.get("name", "")
+            ok, msg = plugins_cx_toggle(name)
+            self._json({"ok": ok, "error": None if ok else msg}); return
 
         self.send_error(404)
 
