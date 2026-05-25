@@ -356,18 +356,33 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
           MultiManager не хранит копии ваших API-ключей отдельно — всё читается из конфигов инструментов.
         </p>
       </div>
+    </div>
+    <div class="card">
+      <h2>Прокси</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 10px">
+        Прокси будет применяться ко всем MCP серверам при переключении профиля.
+      </p>
+      <div class="dual">
+        <div><label>HTTP_PROXY</label><input id="cfgHttpProxy" type="text" placeholder="http://127.0.0.1:8080" style="font-size:13px"></div>
+        <div><label>HTTPS_PROXY</label><input id="cfgHttpsProxy" type="text" placeholder="http://127.0.0.1:8080" style="font-size:13px"></div>
       </div>
-      <div class="card">
-        <h2>Auto-backup</h2>
-        <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
-          При переключении профиля текущее состояние авто-бэкапится.
-        </p>
-        <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:14px">
-          <input id="cfgAutoBackup" type="checkbox" onchange="toggleAutoBackup()"> Авто-бэкап включён
-        </label>
-        <div style="margin-top:10px">
-          <button class="btn btn-sm secondary" onclick="backupNow()">Создать бэкап сейчас</button>
-        </div>
+      <label>NO_PROXY (через запятую)</label>
+      <input id="cfgNoProxy" type="text" placeholder="localhost,127.0.0.1,.local" style="font-size:13px">
+      <div class="row" style="margin-top:10px">
+        <button class="btn btn-sm green" onclick="saveProxy()">Сохранить прокси</button>
+        <span id="proxyStatus" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Auto-backup</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
+        При переключении профиля текущее состояние авто-бэкапится.
+      </p>
+      <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:14px">
+        <input id="cfgAutoBackup" type="checkbox" onchange="toggleAutoBackup()"> Авто-бэкап включён
+      </label>
+      <div style="margin-top:10px">
+        <button class="btn btn-sm secondary" onclick="backupNow()">Создать бэкап сейчас</button>
       </div>
     </div>
     <div class="card">
@@ -717,6 +732,17 @@ async function backupRestore(name){if(!confirm('Восстановить бэк�
 async function backupDelete(name){if(!confirm('Удалить бэкап "'+name+'"?'))return;await api('/api/backup-delete',{name});listBackups()}
 async function toggleAutoBackup(){const v=document.getElementById('cfgAutoBackup').checked;await api('/api/set-auto-backup',{enabled:v})}
 
+// ===== PROXY =====
+async function saveProxy(){
+  const httpProxy=document.getElementById('cfgHttpProxy').value.trim()
+  const httpsProxy=document.getElementById('cfgHttpsProxy').value.trim()
+  const noProxy=document.getElementById('cfgNoProxy').value.trim()
+  setStatus('сохранение...')
+  const r=await api('/api/set-proxy',{http_proxy:httpProxy,https_proxy:httpsProxy,no_proxy:noProxy})
+  document.getElementById('proxyStatus').textContent=r.message||''
+  setStatus('готов')
+}
+
 // ===== SKILL DIFF =====
 async function skDiff(){
   setStatus('сравнение...')
@@ -924,6 +950,11 @@ async function init(){
   document.getElementById('cfgCdPath').textContent=document.location.origin+'/api/cd-config-path'
   document.getElementById('cfgCcPath').textContent=document.location.origin+'/api/cc-config-path'
   document.getElementById('cfgCxPath').textContent=document.location.origin+'/api/cx-config-path'
+  if(cfg.proxy){
+    document.getElementById('cfgHttpProxy').value=cfg.proxy.http_proxy||''
+    document.getElementById('cfgHttpsProxy').value=cfg.proxy.https_proxy||''
+    document.getElementById('cfgNoProxy').value=cfg.proxy.no_proxy||''
+  }
 }
 init()
 </script>
@@ -1830,6 +1861,17 @@ class Handler(BaseHTTPRequestHandler):
             if not raw:
                 if isinstance(pdata.get("settings"), dict): raw = json.dumps(pdata["settings"], ensure_ascii=False, indent=2)
                 else: raw = str(pdata.get("settings", ""))
+            # Inject proxy env vars
+            proxy = cfg.get("proxy", {})
+            if proxy.get("http_proxy") or proxy.get("https_proxy"):
+                try:
+                    settings = json.loads(raw)
+                    env = settings.setdefault("env", {})
+                    if proxy.get("http_proxy"): env["HTTP_PROXY"] = proxy["http_proxy"]
+                    if proxy.get("https_proxy"): env["HTTPS_PROXY"] = proxy["https_proxy"]
+                    if proxy.get("no_proxy"): env["NO_PROXY"] = proxy["no_proxy"]
+                    raw = json.dumps(settings, ensure_ascii=False, indent=2)
+                except Exception: pass
             write_file_text(str(CLAUDE_CODE_SETTINGS), raw)
             self._json({"message": f"Активирован пресет '{name}'"}); return
 
@@ -1887,6 +1929,36 @@ class Handler(BaseHTTPRequestHandler):
             if pdata.get("config"): write_file_text(str(CODEX_CONFIG), pdata["config"])
             if pdata.get("auth"): write_file_text(str(CODEX_AUTH), pdata["auth"])
             if pdata.get("endpoint"): cfg["codex_endpoint"] = pdata["endpoint"]
+            # Inject proxy env vars into config.toml
+            proxy = cfg.get("proxy", {})
+            if proxy.get("http_proxy") or proxy.get("https_proxy"):
+                import tomllib
+                raw = read_file_text(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
+                if raw:
+                    try:
+                        lines = raw.split("\n")
+                        new_lines = []
+                        wrote_proxy = False
+                        has_proxy_section = False
+                        for line in lines:
+                            stripped = line.strip()
+                            if stripped == "[proxy]":
+                                has_proxy_section = True
+                            if stripped.startswith("[") and not wrote_proxy and not has_proxy_section:
+                                # Inject proxy section before other sections
+                                new_lines.append("\n[proxy]")
+                                if proxy.get("http_proxy"): new_lines.append(f'http = "{proxy["http_proxy"]}"')
+                                if proxy.get("https_proxy"): new_lines.append(f'https = "{proxy["https_proxy"]}"')
+                                if proxy.get("no_proxy"): new_lines.append(f'no_proxy = "{proxy["no_proxy"]}"')
+                                wrote_proxy = True
+                            new_lines.append(line)
+                        if not wrote_proxy and not has_proxy_section:
+                            new_lines.append("\n[proxy]")
+                            if proxy.get("http_proxy"): new_lines.append(f'http = "{proxy["http_proxy"]}"')
+                            if proxy.get("https_proxy"): new_lines.append(f'https = "{proxy["https_proxy"]}"')
+                            if proxy.get("no_proxy"): new_lines.append(f'no_proxy = "{proxy["no_proxy"]}"')
+                        CODEX_CONFIG.write_text("\n".join(new_lines))
+                    except Exception: pass
             save_config(cfg); self._json({"message": f"Активирован профиль '{name}'"}); return
 
         if u.path == "/api/cx-delete":
@@ -2081,6 +2153,15 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/set-auto-backup":
             cfg["auto_backup"] = body.get("enabled", True)
             save_config(cfg); self._json({"message": "OK"}); return
+
+        # Proxy
+        if u.path == "/api/set-proxy":
+            cfg["proxy"] = {
+                "http_proxy": body.get("http_proxy", ""),
+                "https_proxy": body.get("https_proxy", ""),
+                "no_proxy": body.get("no_proxy", ""),
+            }
+            save_config(cfg); self._json({"message": "Прокси сохранён"}); return
 
         # Skill diff
         if u.path == "/api/sk-diff":
