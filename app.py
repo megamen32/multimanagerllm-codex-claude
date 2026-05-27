@@ -112,46 +112,56 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
   </div>
 
   <div class="tabs" id="tabs">
-    <div class="tab active" data-tab="profiles">Профили</div>
-    <div class="tab" data-tab="scenes">Сцены</div>
+    <div class="tab active" data-tab="claude-desktop">Claude Desktop</div>
+    <div class="tab" data-tab="claude-code">Claude Code</div>
+    <div class="tab" data-tab="codex">Codex</div>
+    <div class="tab" data-tab="opencode">OpenCode</div>
+    <div class="tab" data-tab="cline">Cline</div>
+    <div class="tab" data-tab="roo-code">Roo Code</div>
+    <div class="tab" data-tab="glm">GLM / Z.AI</div>
+    <div class="tab" data-tab="scenes">Scenes</div>
     <div class="tab" data-tab="skills">Skills</div>
-    <div class="tab" data-tab="codex-endpoint">Codex endpoint</div>
     <div class="tab" data-tab="mcp">MCP</div>
-    <div class="tab" data-tab="plugins">Плагины</div>
-    <div class="tab" data-tab="settings">Настройки</div>
+    <div class="tab" data-tab="plugins">Plugins</div>
+    <div class="tab" data-tab="usage">Usage</div>
+    <div class="tab" data-tab="settings">Settings</div>
   </div>
 
-  <!-- ========== TAB: PROFILES ========== -->
-  <div class="tab-content active" id="tab-profiles">
-    <div class="dual">
-      <div class="card">
-        <h2><span class="status-dot green"></span>Claude Desktop</h2>
-        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
-          Профили хранятся в <code>~/.multimanager/config.json</code>
-        </p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn btn-sm" onclick="cdSave()">Сохранить текущий</button>
-          <button class="btn btn-sm secondary" onclick="cdRefresh()">Обновить</button>
-        </div>
-        <div id="cdProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-
-      <div class="card">
-        <h2><span class="status-dot green"></span>Claude Code (CLI)</h2>
-        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
-          Пресеты хранятся в <code>~/.multimanager/config.json</code>
-        </p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn btn-sm" onclick="ccSave()">Сохранить текущий как</button>
-          <input id="ccNewName" type="text" placeholder="имя пресета" style="width:140px;display:inline-block;padding:6px 10px">
-          <button class="btn btn-sm secondary" onclick="ccRefresh()">Обновить</button>
-        </div>
-        <div id="ccPresets" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-    </div>
-
+  <!-- ========== TAB: CLAUDE DESKTOP ========== -->
+  <div class="tab-content active" id="tab-claude-desktop">
     <div class="card">
-      <h2><span class="status-dot yellow"></span>Codex</h2>
+      <h2><span class="status-dot green"></span>Claude Desktop</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+        Профили хранятся в <code>~/.multimanager/config.json</code>
+      </p>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn btn-sm" onclick="cdSave()">Сохранить текущий</button>
+        <button class="btn btn-sm secondary" onclick="cdRefresh()">Обновить</button>
+      </div>
+      <div id="cdProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: CLAUDE CODE ========== -->
+  <div class="tab-content" id="tab-claude-code">
+    <div class="card">
+      <h2><span class="status-dot green"></span>Claude Code (CLI)</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+        Пресеты хранятся в <code>~/.multimanager/config.json</code>
+      </p>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn btn-sm" onclick="ccSave()">Сохранить текущий как</button>
+        <input id="ccNewName" type="text" placeholder="имя пресета" style="width:140px;display:inline-block;padding:6px 10px">
+        <button class="btn btn-sm secondary" onclick="ccRefresh()">Обновить</button>
+      </div>
+      <div id="ccPresets" class="list"><div class="empty-state">Загрузка...</div></div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: CODEX ========== -->
+  <div class="tab-content" id="tab-codex">
+    <div class="card">
+      <h2><span class="status-dot yellow"></span>Codex Profiles</h2>
       <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
         Профили хранятся в <code>~/.multimanager/config.json</code>.
         Можно импортировать аккаунты из <code>~/.codex/auth.json*</code>.
@@ -163,6 +173,71 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
         <button class="btn btn-sm green" onclick="cxImportFromAuth()">+ Из auth.json</button>
       </div>
       <div id="cxProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
+    </div>
+    <div class="card">
+      <h2>Codex Custom Endpoint</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
+        Кастомный API endpoint для Codex. Устанавливает <code>OPENAI_BASE_URL</code>.
+      </p>
+      <label>API Endpoint URL</label>
+      <div class="row">
+        <input id="cxEndpoint" type="url" placeholder="https://example.com/v1" style="flex:1">
+        <button class="btn" onclick="cxSetEndpoint()">Установить</button>
+        <button class="btn secondary" onclick="cxClearEndpoint()">Сбросить</button>
+      </div>
+      <div id="cxEndpointStatus" style="margin-top:10px;font-size:13px">Загрузка...</div>
+    </div>
+    <div class="card">
+      <h2>Codex Wrapper Script</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
+        Создаёт <code>~/.local/bin/codex-wrapper</code> с <code>OPENAI_BASE_URL</code>.
+      </p>
+      <button class="btn" onclick="cxCreateWrapper()">Создать wrapper</button>
+      <div id="cxWrapperStatus" style="margin-top:10px;font-size:13px"></div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: OPENCODE ========== -->
+  <div class="tab-content" id="tab-opencode">
+    <div class="card">
+      <h2><span class="status-dot yellow"></span>OpenCode</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 8px">
+        Конфиг: <code>~/.config/opencode/</code>
+      </p>
+      <div class="empty-state">Coming soon</div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: CLINE ========== -->
+  <div class="tab-content" id="tab-cline">
+    <div class="card">
+      <h2><span class="status-dot yellow"></span>Cline (VS Code)</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 8px">
+        Конфиг: <code>~/.cline/</code>
+      </p>
+      <div class="empty-state">Coming soon</div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: ROO CODE ========== -->
+  <div class="tab-content" id="tab-roo-code">
+    <div class="card">
+      <h2><span class="status-dot yellow"></span>Roo Code</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 8px">
+        Конфиг: <code>~/.roo/</code>
+      </p>
+      <div class="empty-state">Coming soon</div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: GLM / Z.AI ========== -->
+  <div class="tab-content" id="tab-glm">
+    <div class="card">
+      <h2><span class="status-dot yellow"></span>GLM / Z.AI</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 8px">
+        Аккаунты Z.AI, токены, лимиты, модели.
+      </p>
+      <div class="empty-state">Coming soon</div>
     </div>
   </div>
 
@@ -252,32 +327,6 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
     </div>
   </div>
 
-  <!-- ========== TAB: CODEX ENDPOINT ========== -->
-  <div class="tab-content" id="tab-codex-endpoint">
-    <div class="card">
-      <h2>Codex Custom API Endpoint</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
-        Укажи кастомный endpoint для Codex, например <code>https://llm.bezrabotnyi.com/v1</code>.
-        Устанавливает <code>OPENAI_BASE_URL</code>.
-      </p>
-      <label>API Endpoint URL</label>
-      <div class="row">
-        <input id="cxEndpoint" type="url" placeholder="https://llm.bezrabotnyi.com/v1" style="flex:1">
-        <button class="btn" onclick="cxSetEndpoint()">Установить</button>
-        <button class="btn secondary" onclick="cxClearEndpoint()">Сбросить</button>
-      </div>
-      <div id="cxEndpointStatus" style="margin-top:10px;font-size:13px">Загрузка...</div>
-    </div>
-    <div class="card">
-      <h2>Codex Wrapper Script</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
-        Создаёт <code>~/.local/bin/codex-wrapper</code> с <code>OPENAI_BASE_URL</code>.
-      </p>
-      <button class="btn" onclick="cxCreateWrapper()">Создать wrapper</button>
-      <div id="cxWrapperStatus" style="margin-top:10px;font-size:13px"></div>
-    </div>
-  </div>
-
   <!-- ========== TAB: MCP ========== -->
   <div class="tab-content" id="tab-mcp">
     <div class="card">
@@ -334,6 +383,21 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
       <h2>Plugin Marketplaces (Claude Code)</h2>
       <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Зарегистрированные marketplace-и для Claude Code плагинов.</p>
       <div id="plMarketplaces" class="list"><div class="empty-state">Загрузка...</div></div>
+    </div>
+  </div>
+
+  <!-- ========== TAB: USAGE ========== -->
+  <div class="tab-content" id="tab-usage">
+    <div class="card">
+      <h2>Rate Limits & Usage</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
+        Использование rate limit для Codex профилей. Данные запрашиваются с OpenAI в реальном времени.
+      </p>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn btn-sm" onclick="usageRefresh()">Обновить все</button>
+        <span id="usageStatus" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
+      </div>
+      <div id="usageDashboard" class="list"><div class="empty-state">Загрузка...</div></div>
     </div>
   </div>
 
@@ -410,6 +474,10 @@ code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size
         Конфиг: <code>~/.multimanager/config.json</code><br>
         Бэкапы: <code>~/.multimanager/backups/</code>
       </p>
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;display:flex;gap:10px">
+        <button class="btn btn-sm red" onclick="shutdownApp()">🛑 Закрыть сервер</button>
+        <span id="shutdownMsg" style="font-size:12px;color:var(--muted)"></span>
+      </div>
     </div>
   </div>
 
@@ -450,6 +518,7 @@ document.querySelectorAll('.tab').forEach(tab=>{
     document.getElementById('tab-'+t).classList.add('active')
     if(t==='mcp')mcpRefresh()
     if(t==='plugins'){plCcRefresh();plCxRefresh()}
+    if(t==='usage')usageRefresh()
   })
 })
 
@@ -574,16 +643,70 @@ async function saveEnvVars(){
 }
 
 // ===== CODEX PROFILES =====
+let cxUsageCache = {};
+let cxProfilesData = null;
+let cxUsageLoading = false;
+async function cxLoadAllUsage(){
+  if(cxUsageLoading || !cxProfilesData) return;
+  cxUsageLoading = true;
+  const profiles = cxProfilesData.profiles||[];
+  const fetches = profiles.map(p =>
+    api('/api/cx-rate-limits?profile='+encodeURIComponent(p.name))
+      .then(r => { cxUsageCache[p.name] = r; if(cxProfilesData) renderCxProfiles(cxProfilesData); })
+      .catch(() => { cxUsageCache[p.name] = {error:'fetch failed'}; if(cxProfilesData) renderCxProfiles(cxProfilesData); })
+  );
+  await Promise.allSettled(fetches);
+  cxUsageLoading = false;
+}
+async function cxLoadUsage(name){
+  const safeId = name.replace(/[^a-zA-Z0-9_-]/g,'_');
+  const uEl = document.getElementById('cx-usage-'+safeId);
+  if(uEl) uEl.innerHTML = '<span style="font-size:12px;color:var(--muted)">⏳ загрузка...</span>';
+  try{
+    const r = await api('/api/cx-rate-limits?profile='+encodeURIComponent(name));
+    cxUsageCache[name] = r;
+    if(cxProfilesData) renderCxProfiles(cxProfilesData);
+  }catch(e){ cxUsageCache[name]={error:'fetch failed'}; if(cxProfilesData) renderCxProfiles(cxProfilesData); }
+}
 async function cxRefresh(){
-  setStatus('загрузка...');const data=await api('/api/cx-profiles');renderCxProfiles(data);setStatus('готов')
+  setStatus('загрузка...');
+  cxProfilesData = await api('/api/cx-profiles');
+  renderCxProfiles(cxProfilesData);
+  cxLoadAllUsage();
+  setStatus('готов')
+}
+function usageBar(pct, label, resetAt) {
+  if(pct==null) return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">${label}: —</span>`;
+  const color = pct>80?'var(--danger)':pct>50?'var(--warning)':'#22c55e';
+  const reset = resetAt ? new Date(resetAt*1000).toLocaleString().slice(-8) : '';
+  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#ccc" title="сброс ${resetAt?new Date(resetAt*1000).toLocaleString():'—'}">
+    ${label}: <span style="display:inline-block;width:60px;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;vertical-align:middle">
+      <span style="display:block;width:${Math.min(pct,100)}%;height:100%;background:${color};border-radius:3px"></span>
+    </span> <b>${Math.round(pct)}%</b>${reset?' <span style="opacity:.5;font-size:11px">⌛'+reset+'</span>':''}
+  </span>`
+}
+function tokenExpiryBadge(expAt, expIn) {
+  if(!expAt) return '';
+  const hours = Math.round(expIn/3600);
+  const color = hours<1?'var(--danger)':hours<24?'#f59e0b':'var(--muted)';
+  return `<span style="font-size:11px;color:${color}" title="токен истекает ${new Date(expAt*1000).toLocaleString()}">🔑 ${hours<1?'<1ч':hours+'ч'}</span>`;
 }
 function renderCxProfiles(data){
   const el=document.getElementById('cxProfiles');el.innerHTML=''
   const profiles=data.profiles||[];const currentName=data.current||''
   if(profiles.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
   if(!currentName && profiles.length>0){
-    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
-    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним профилем. Сохрани как профиль.'
+    const live = data.current_live;
+    const liveInfo = live ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--muted)">
+        ${live.email?'<span>📧 '+esc(live.email)+'</span>':''}
+        ${live.name?'<span>👤 '+esc(live.name)+'</span>':''}
+        ${live.plan?'<span class="tag" style="background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.3);font-size:10px">'+esc(live.plan)+'</span>':''}
+        ${live.subscription_until?'<span>до '+esc(live.subscription_until)+'</span>':''}
+        ${live.model?'<span>model: '+esc(live.model)+'</span>':''}
+        ${live.user_id?'<span style="opacity:.5">uid: '+esc(live.user_id.slice(0,8))+'</span>':''}
+      </div>` : '';
+    const info=document.createElement('div');info.style.cssText='padding:10px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
+    info.innerHTML=`⚠ Текущие настройки не сохранены как профиль. <button class="btn btn-sm" style="margin-left:8px" onclick="cxSave()">Сохранить</button>${liveInfo}`
     el.appendChild(info)
   }
   profiles.sort((a,b)=>a.name.localeCompare(b.name))
@@ -591,12 +714,31 @@ function renderCxProfiles(data){
     const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
     const planInfo=p.plan?`<span class="tag" style="background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.3)">${esc(p.plan)}</span>`:''
     const subInfo=p.subscription_until?`<span style="font-size:11px;color:var(--muted)">до ${esc(p.subscription_until)}</span>`:''
+    const safeId = p.name.replace(/[^a-zA-Z0-9_-]/g,'_');
+    const u = cxUsageCache[p.name];
+    let usageHtml = '';
+    if(u && !u.error) {
+      const rl=u.rate_limit||{}, pWin=rl.primary||{}, sWin=rl.secondary;
+      usageHtml = `<div id="cx-usage-${safeId}" style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.04);border-radius:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        ${usageBar(pWin.used_percent, '5h', pWin.resets_at)}
+        ${usageBar(sWin?sWin.used_percent:null, '7d', sWin?sWin.resets_at:null)}
+        ${tokenExpiryBadge(u.token_expires_at, u.token_expires_in)}
+        ${u.token_refreshed?'<span style="font-size:11px;color:#22c55e">🔄 refreshed</span>':''}
+        <span style="font-size:11px;color:var(--muted)">${esc(u.plan_type||p.plan||'')}</span>
+      </div>`
+    } else if(u && u.error) {
+      usageHtml = `<div id="cx-usage-${safeId}" style="margin-top:6px;font-size:12px;color:var(--danger);padding:6px 10px;background:rgba(239,68,68,.08);border-radius:8px">⚠ ${esc(u.error.slice(0,80))}</div>`
+    } else {
+      usageHtml = `<div id="cx-usage-${safeId}" style="margin-top:6px;font-size:12px;color:var(--muted);padding:6px 10px">⏳</div>`
+    }
     const div=document.createElement('div');div.className='item'
     div.innerHTML=`<div class="info"><div class="name">${dot}${esc(p.name)}${p.model?' <span style="color:var(--muted)">— '+esc(p.model)+'</span>':''}</div>
       <div class="path" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         ${planInfo} ${subInfo}
         ${p.email?'<span style="font-size:11px;color:var(--muted)">'+esc(p.email)+'</span>':''}
-      </div></div>
+      </div>
+      ${usageHtml}
+      </div>
       <div class="actions">
         <button class="btn btn-sm warning" onclick="cxRename('${esc(p.name)}')" title="Переименовать">✎</button>
         ${act?'<span class="tag green">активен</span>':`<button class="btn btn-sm secondary" onclick="cxUse('${esc(p.name)}')">Switch</button>`}
@@ -605,13 +747,81 @@ function renderCxProfiles(data){
     el.appendChild(div)
   })
 }
+
+// ===== USAGE TAB =====
+async function usageRefresh(){
+  const el=document.getElementById('usageDashboard');el.innerHTML='<div class="empty-state">Загрузка...</div>'
+  document.getElementById('usageStatus').textContent='загрузка...'
+  const data=await api('/api/cx-profiles');
+  const profiles=data.profiles||[];
+  if(profiles.length===0){el.innerHTML='<div class="empty-state">Нет Codex профилей</div>';document.getElementById('usageStatus').textContent='';return}
+  const fetches = profiles.map(p => 
+    api('/api/cx-rate-limits?profile='+encodeURIComponent(p.name))
+      .then(r => { cxUsageCache[p.name] = r; })
+      .catch(() => { cxUsageCache[p.name] = {error:'fetch failed'}; })
+  );
+  await Promise.allSettled(fetches);
+  let html='';
+  profiles.sort((a,b)=>a.name.localeCompare(b.name))
+  profiles.forEach(p=>{
+    const u=cxUsageCache[p.name];
+    const rl=u?.rate_limit||{};
+    let body='';
+    if(!u){body='<div style="color:var(--muted)">⏳</div>'}
+    else if(u.error){body=`<div style="color:var(--danger)">⚠ ${esc(u.error)}</div>`}
+    else {
+      const pw=rl.primary||{}, sw=rl.secondary;
+      const pPct=pw.used_percent!=null?pw.used_percent:0;
+      const pColor=pPct>80?'var(--danger)':pPct>50?'#f59e0b':'#22c55e';
+      const pReset=pw.resets_at?new Date(pw.resets_at*1000).toLocaleString():'—';
+      body=`<div style="margin-bottom:8px"><b>5h window</b> &middot; сброс ${pReset}</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden">
+            <div style="width:${Math.min(pPct,100)}%;height:100%;background:${pColor};border-radius:5px;transition:width .4s"></div>
+          </div>
+          <span style="font-weight:700;font-size:16px;min-width:50px;text-align:right">${Math.round(pPct)}%</span>
+        </div>`
+      if(sw){
+        const sPct=sw.used_percent!=null?sw.used_percent:0;
+        const sColor=sPct>80?'var(--danger)':sPct>50?'#f59e0b':'#22c55e';
+        const sReset=sw.resets_at?new Date(sw.resets_at*1000).toLocaleString():'—';
+        body+=`<div style="margin-bottom:8px"><b>7d window</b> &middot; сброс ${sReset}</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden">
+              <div style="width:${Math.min(sPct,100)}%;height:100%;background:${sColor};border-radius:5px;transition:width .4s"></div>
+            </div>
+            <span style="font-weight:700;font-size:16px;min-width:50px;text-align:right">${Math.round(sPct)}%</span>
+          </div>`
+      } else {
+        body+=`<div style="padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;color:var(--muted);font-size:13px;margin-bottom:14px">Нет вторичного окна (free план)</div>`
+      }
+      const cred=u.credits||{};
+      body+=`<div style="font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
+        <span>Credits: ${cred.has_credits?cred.balance||'0':'нет'}</span>
+        <span>Тип: ${cred.unlimited?'безлимит':'ограничено'}</span>
+        ${u.spend_control_reached?'<span style="color:var(--danger)">⛔ Spend control reached</span>':''}
+        <span>🔑 ${u.token_expires_in?Math.round(u.token_expires_in/3600)+'ч':'?'}</span>
+        ${u.token_refreshed?'<span style="color:#22c55e">🔄 refreshed</span>':''}
+      </div>`
+    }
+    html+=`<div class="item" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div><b>${esc(p.name)}</b> <span class="tag" style="background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.3);font-size:11px">${esc(u?.plan_type||p.plan||'?')}</span> ${p.email?'<span style="color:var(--muted);font-size:12px">'+esc(p.email)+'</span>':''}</div>
+        <div style="font-size:12px;color:var(--muted)">${rl?.allowed===false?'<span style="color:var(--danger)">⛔ blocked</span>':''} ${rl?.limit_reached?'<span style="color:var(--danger)">⚠ limit reached</span>':''}</div>
+      </div>
+      ${body}
+    </div>`
+  })
+  el.innerHTML=html
+  document.getElementById('usageStatus').textContent=''
+}
 async function cxSave(){
   const name=document.getElementById('cxNewName').value.trim()
   if(!name){alert('Введи имя профиля');return}
   setStatus('сохранение...');await api('/api/cx-save',{name});cxRefresh();setStatus('готов')
   document.getElementById('cxNewName').value=''
 }
-async function cxUse(name){setStatus('переключение...');await api('/api/cx-use',{name});cxRefresh();setStatus('готов')}
+async function cxUse(name){setStatus('переключение...');await api('/api/cx-use',{name});await cxRefresh();cxLoadUsage(name);setStatus('готов')}
 async function cxDelete(name){if(!confirm('Удалить профиль Codex "'+name+'"?'))return;await api('/api/cx-delete',{name});cxRefresh()}
 async function cxRename(name){
   const newName=prompt('Новое имя для профиля "'+name+'":',name)
@@ -956,6 +1166,13 @@ async function init(){
     document.getElementById('cfgNoProxy').value=cfg.proxy.no_proxy||''
   }
 }
+async function shutdownApp(){
+  const ok=confirm('Закрыть сервер MultiManager?');
+  if(!ok) return;
+  document.getElementById('shutdownMsg').textContent='⏳ выключение...';
+  try{await api('/api/shutdown')}catch(e){}
+  document.getElementById('shutdownMsg').textContent='✅ сервер остановлен (закрой вкладку)';
+}
 init()
 </script>
 </body></html>"""
@@ -1215,7 +1432,6 @@ def _decode_cx_plan(auth_raw):
         if pad != 4: payload += "=" * pad
         claims = json.loads(base64.urlsafe_b64decode(payload))
         auth_info = claims.get("https://api.openai.com/auth", claims.get("https://api.openai.com/auth", {}))
-        # openai claims may be nested differently
         for key in claims:
             if "auth" in key.lower() and isinstance(claims[key], dict):
                 auth_info = claims[key]
@@ -1239,6 +1455,136 @@ def _decode_cx_plan(auth_raw):
     except Exception:
         return {}
 
+def _decode_jwt_payload(token):
+    import base64
+    parts = token.split(".")
+    if len(parts) < 2: return {}
+    payload = parts[1]
+    pad = 4 - len(payload) % 4
+    if pad != 4: payload += "=" * pad
+    return json.loads(base64.urlsafe_b64decode(payload))
+
+TOKEN_REFRESH_THRESHOLD = 86400  # refresh if access_token expires within 24 hours
+
+def refresh_auth_token(auth_raw):
+    """Use refresh_token to get new tokens. Returns updated auth_raw or None."""
+    try:
+        ad = json.loads(auth_raw) if isinstance(auth_raw, str) else auth_raw
+        refresh_token = ad.get("tokens", {}).get("refresh_token", "")
+        if not refresh_token: return None
+        import urllib.parse
+        client_id = "app_EMoamEEZ73f0CkXaXp7hrann"
+        ctx = ssl.create_default_context()
+        data = urllib.parse.urlencode({
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        }).encode()
+        req = urllib.request.Request(
+            "https://auth.openai.com/oauth/token",
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": "Codex/0.130.0",
+            }
+        )
+        resp = urllib.request.urlopen(req, context=ctx, timeout=15)
+        new_tokens = json.loads(resp.read())
+        ad["tokens"]["access_token"] = new_tokens["access_token"]
+        ad["tokens"]["id_token"] = new_tokens.get("id_token", ad["tokens"].get("id_token", ""))
+        if "refresh_token" in new_tokens:
+            ad["tokens"]["refresh_token"] = new_tokens["refresh_token"]
+        return json.dumps(ad, ensure_ascii=False)
+    except Exception:
+        return None
+
+def fetch_rate_limits(auth_raw, update_callback=None):
+    if not auth_raw: return {"error": "no auth data"}
+    try:
+        import urllib.request, ssl
+        ad = json.loads(auth_raw) if isinstance(auth_raw, str) else auth_raw
+        access_token = ad.get("tokens", {}).get("access_token", "")
+        account_id = ad.get("tokens", {}).get("account_id", "")
+        if not access_token: return {"error": "no access token"}
+
+        # Check token expiry
+        token_exp = 0
+        try:
+            claims = _decode_jwt_payload(access_token)
+            token_exp = claims.get("exp", 0)
+        except Exception:
+            pass
+
+        now = time.time()
+        token_expires_in = max(0, token_exp - now) if token_exp else 0
+        refreshed = False
+
+        # Auto-refresh if token expires within threshold
+        if token_expires_in > 0 and token_expires_in < TOKEN_REFRESH_THRESHOLD:
+            new_raw = refresh_auth_token(auth_raw)
+            if new_raw:
+                ad = json.loads(new_raw)
+                access_token = ad.get("tokens", {}).get("access_token", "")
+                account_id = ad.get("tokens", {}).get("account_id", "")
+                auth_raw = new_raw
+                refreshed = True
+                try:
+                    claims = _decode_jwt_payload(access_token)
+                    token_exp = claims.get("exp", 0)
+                    token_expires_in = max(0, token_exp - now) if token_exp else 0
+                except Exception:
+                    pass
+                if update_callback:
+                    update_callback(new_raw)
+
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(
+            "https://chatgpt.com/backend-api/wham/usage",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "ChatGPT-Account-Id": account_id,
+                "originator": "Codex Desktop",
+                "User-Agent": "Codex/0.130.0",
+            }
+        )
+        resp = urllib.request.urlopen(req, context=ctx, timeout=15)
+        data = json.loads(resp.read())
+        rl = data.get("rate_limit", {})
+        pw = rl.get("primary_window") or {}
+        sw = rl.get("secondary_window")
+        credits = data.get("credits", {}) or {}
+        return {
+            "rate_limit": {
+                "allowed": rl.get("allowed", True),
+                "limit_reached": rl.get("limit_reached", False),
+                "primary": {
+                    "used_percent": pw.get("used_percent", 0),
+                    "window_seconds": pw.get("limit_window_seconds", 0),
+                    "resets_at": pw.get("reset_at", 0),
+                },
+                "secondary": {
+                    "used_percent": sw.get("used_percent", 0) if sw else None,
+                    "window_seconds": sw.get("limit_window_seconds", 0) if sw else None,
+                    "resets_at": sw.get("reset_at", 0) if sw else None,
+                } if sw else None,
+            },
+            "credits": {
+                "has_credits": credits.get("has_credits", False),
+                "unlimited": credits.get("unlimited", False),
+                "balance": credits.get("balance", "0"),
+            },
+            "spend_control_reached": data.get("spend_control", {}).get("reached", False),
+            "plan_type": data.get("plan_type", ""),
+            "email": data.get("email", ""),
+            "token_expires_at": token_exp,
+            "token_expires_in": round(token_expires_in),
+            "token_refreshed": refreshed,
+        }
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:200]}"}
+    except Exception as e:
+        return {"error": str(e)}
+
 def get_cx_profiles_data(cfg):
     profiles = cfg.get("codex_profiles", {})
     current_name = get_current_cx_profile_name(cfg)
@@ -1256,6 +1602,27 @@ def get_cx_profiles_data(cfg):
             "subscription_until": plan.get("subscription_until", ""),
             "name_claim": plan.get("name", ""),
         })
+    # If no saved profile matches current, parse the active auth.json to show who's logged in
+    if not current_name and CODEX_AUTH.exists():
+        try:
+            auth_raw = CODEX_AUTH.read_text()
+            plan = _decode_cx_plan(auth_raw)
+            model = ""
+            if CODEX_CONFIG.exists():
+                for line in CODEX_CONFIG.read_text().splitlines():
+                    if line.startswith("model"):
+                        model = line.split("=")[-1].strip().strip('" ')
+            result["current_live"] = {
+                "email": plan.get("email", ""),
+                "name": plan.get("name", ""),
+                "plan": plan.get("plan", ""),
+                "subscription_until": plan.get("subscription_until", ""),
+                "user_id": plan.get("user_id", ""),
+                "account_id": plan.get("account_id", ""),
+                "model": model,
+            }
+        except Exception:
+            pass
     return result
 
 # ---- Skills ----
@@ -1801,6 +2168,36 @@ class Handler(BaseHTTPRequestHandler):
         if u.path in ("/api/cc-config-path",): self._json({"path": str(CLAUDE_CODE_SETTINGS)}); return
         if u.path in ("/api/cx-config-path",): self._json({"path": str(CODEX_CONFIG)}); return
 
+        # Rate limits
+        if u.path == "/api/cx-rate-limits":
+            qs = parse_qs(u.query); name = qs.get("profile", [""])[0]
+            saved_name = name
+            if name:
+                pdata = cfg.get("codex_profiles", {}).get(name)
+                if not pdata: self._json({"error": f"Profile '{name}' not found"}); return
+                auth_raw = pdata.get("auth", "")
+            else:
+                auth_raw = read_file_text(CODEX_AUTH) if CODEX_AUTH.exists() else ""
+                name = ""
+            if not auth_raw: self._json({"error": "no auth data available"}); return
+
+            def _on_refresh(new_raw):
+                nonlocal name, saved_name
+                if name:
+                    cfg.setdefault("codex_profiles", {}).get(name, {})["auth"] = new_raw
+                    save_config(cfg)
+                else:
+                    CODEX_AUTH.write_text(new_raw)
+
+            result = fetch_rate_limits(auth_raw, _on_refresh)
+            self._json(result); return
+
+        # Shutdown
+        if u.path == "/api/shutdown":
+            self._json({"message": "shutting down"})
+            threading.Timer(0.1, lambda: os._exit(0)).start()
+            return
+
         # MCP & Plugins GET endpoints
         if u.path == "/api/mcp-list": self._json(mcp_list_servers(cfg)); return
         if u.path == "/api/plugins-cc": self._json(plugins_cc_list()); return
@@ -1917,7 +2314,13 @@ class Handler(BaseHTTPRequestHandler):
                         claims = json.loads(base64.urlsafe_b64decode(payload))
                         email = claims.get("email", "")
             except Exception: pass
-            cfg.setdefault("codex_profiles", {})[name] = {"config_hash": ch, "auth_hash": ah, "config": config_text, "auth": auth_text, "email": email, "model": model, "endpoint": cfg.get("codex_endpoint", "")}
+            profiles = cfg.setdefault("codex_profiles", {})
+            # Remove duplicate by email (keep only the newest = this one)
+            if email:
+                dupes = [k for k, v in profiles.items() if k != name and v.get("email") == email]
+                for d in dupes:
+                    del profiles[d]
+            profiles[name] = {"config_hash": ch, "auth_hash": ah, "config": config_text, "auth": auth_text, "email": email, "model": model, "endpoint": cfg.get("codex_endpoint", "")}
             save_config(cfg); self._json({"message": f"Профиль '{name}' сохранён"}); return
 
         if u.path == "/api/cx-use":
@@ -1992,8 +2395,6 @@ class Handler(BaseHTTPRequestHandler):
                     stem = afp.stem  # auth.json or auth.json.hdfa -> auth, auth.json
                     parts = stem.replace("auth.json", "", 1).strip(".") or "default"
                     profile_name = f"auth-{parts}" if parts != "default" else "auth-default"
-                    if profile_name in profiles:
-                        continue
                     email = ""
                     id_token = auth_data.get("tokens", {}).get("id_token", "")
                     if id_token:
@@ -2005,6 +2406,11 @@ class Handler(BaseHTTPRequestHandler):
                             if pad != 4: payload += "=" * pad
                             claims = json.loads(base64.urlsafe_b64decode(payload))
                             email = claims.get("email", "")
+                    # Remove duplicate by email before importing
+                    if email:
+                        dupes = [k for k, v in profiles.items() if v.get("email") == email]
+                        for d in dupes:
+                            del profiles[d]
                     # read current config.toml
                     config_text = read_file_text(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
                     ch = file_hash(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
@@ -2225,10 +2631,39 @@ def free_port():
     port = s.getsockname()[1]; s.close(); return port
 
 
+def background_token_refresher():
+    """Check every 5 minutes and refresh tokens expiring within 30 minutes."""
+    while True:
+        time.sleep(300)
+        try:
+            cfg = load_config()
+            profiles = cfg.get("codex_profiles", {})
+            for name, pdata in profiles.items():
+                auth_raw = pdata.get("auth", "")
+                if not auth_raw: continue
+                try:
+                    ad = json.loads(auth_raw) if isinstance(auth_raw, str) else auth_raw
+                    token = ad.get("tokens", {}).get("access_token", "")
+                    if not token: continue
+                    claims = _decode_jwt_payload(token)
+                    exp = claims.get("exp", 0)
+                    remaining = max(0, exp - time.time())
+                    if remaining > 0 and remaining < 1800:
+                        new_raw = refresh_auth_token(auth_raw)
+                        if new_raw:
+                            cfg.setdefault("codex_profiles", {})[name]["auth"] = new_raw
+                            save_config(cfg)
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+
 def main():
     port = free_port()
     url = f"http://127.0.0.1:{port}/"
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    threading.Thread(target=background_token_refresher, daemon=True).start()
     threading.Timer(0.35, lambda: webbrowser.open(url)).start()
     print(f"{APP_NAME} running: {url}")
     server.serve_forever()
