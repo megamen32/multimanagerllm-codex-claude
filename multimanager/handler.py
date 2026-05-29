@@ -252,6 +252,17 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/set-auto-backup":
             cfg["auto_backup"] = b.get("enabled", True); save_config(cfg); self._json({"ok": True}); return
 
+        # UTILS
+        if u.path == "/api/open-folder":
+            path = b.get("path", "")
+            if path:
+                import subprocess, os
+                p = Path(os.path.expanduser(path))
+                if p.exists():
+                    subprocess.Popen(["open", "-R", str(p.resolve())])
+                    self._json({"ok": True}); return
+            self._json({"ok": False, "error": "not found"}); return
+
         self.send_error(404)
 
     def log_message(self, *a): pass

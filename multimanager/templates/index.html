@@ -272,6 +272,7 @@ let selProg=null;
 function renderProgCards(progs){const c=document.getElementById('prog-cards');
 c.innerHTML=progs.map(p=>`<div class="pc ${selProg===p.id?'chk':''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account?'\uD83D\uDC1A '+p.active_account:'\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count||0} skills</span><span>\uD83D\uDD17 ${p.mcp_count||0} MCP</span><span>${p.type}</span></div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')}
 const PROG_FILES={'claude-code':['settings.json (config)'],'claude-desktop':['claude_desktop_config.json (config)'],'codex':['config.toml (config)','auth.json (OAuth tokens)'],'opencode':['opencode.json (config)'],'cline':['mcp_settings.json (config)'],'roo-code':['mcp_settings.json (config)']};
+function openFolder(path){api('/api/open-folder',{path})}
 function showProg(id){selProg=id;renderProgCards(null);renderProgDetail(id)}
 function renderProgDetail(id){const el=document.getElementById('prog-detail');if(!id){el.style.display='none';return}
 const d=document.getElementById('prog-detail');d.style.display='block';
@@ -279,8 +280,11 @@ const p=S.progs.find(x=>x.id===id);if(!p){d.innerHTML='';return}
 const files=PROG_FILES[p.id]||[p.type+' config'];
 d.innerHTML='<div style="padding:16px;border-radius:var(--rl);border:1px solid var(--brd);background:var(--card);margin-top:16px"><div style="font-size:14px;font-weight:600;margin-bottom:8px">'+p.name+'</div>'+
 '<table style="width:100%;border-collapse:collapse">'+
-'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">Config</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+esc(p.config_path)+'</td></tr>'+
-files.map(f=>'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">File</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+(f.includes('(')?f.replace(/\(([^)]+)\)/,'<span style="color:var(--tx3);font-size:10px">($1)</span>'):esc(f))+'</td></tr>').join('')+
+'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">Config</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+esc(p.config_path)+'<button class="b bs" onclick="event.stopPropagation();openFolder(\''+esc(p.config_path)+'\')" style="margin-left:6px;padding:2px 6px">\uD83D\uDCC2</button></td></tr>'+
+files.map(f=>{
+const fname=f.replace(/\([^)]+\)/,'').trim();
+const label=f.includes('(')?f.replace(/\(([^)]+)\)/,'<span style="color:var(--tx3);font-size:10px">($1)</span>'):esc(f);
+return'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">File</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+label+'<button class="b bs" onclick="event.stopPropagation();openFolder(\''+esc(p.config_path).replace(/[^/]+$/,'')+'\')" style="margin-left:6px;padding:2px 6px">\uD83D\uDCC2</button></td></tr>'}).join('')+
 (p.active_account?'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">Active</td><td style="padding:6px 0;font-size:12px">'+esc(p.active_account)+'</td></tr>':'')+
 '<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">Skills</td><td style="padding:6px 0;font-size:12px">'+p.skills_count+'</td></tr>'+
 '<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">MCP</td><td style="padding:6px 0;font-size:12px">'+p.mcp_count+'</td></tr>'+
