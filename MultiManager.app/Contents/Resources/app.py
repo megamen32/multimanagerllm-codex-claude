@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-import json, os, shutil, socket, subprocess, sys, threading, time, webbrowser
+"""MultiManager v2 — Unified AI account manager with macOS menu bar."""
+import json, os, shutil, socket, sys, threading, time, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
+from http.client import HTTPConnection, HTTPSConnection
 
 APP_NAME = "MultiManager"
 HOME = Path.home()
@@ -15,6 +17,14 @@ CLAUDE_DESKTOP_DIR = HOME / "Library" / "Application Support"
 CLAUDE_CODE_SETTINGS = HOME / ".claude" / "settings.json"
 CODEX_CONFIG = HOME / ".codex" / "config.toml"
 CODEX_AUTH = HOME / ".codex" / "auth.json"
+ANTHROPIC_CONFIG_DIR = HOME / ".config" / "anthropic"
+ANTHROPIC_CONFIGS_DIR = ANTHROPIC_CONFIG_DIR / "configs"
+ANTHROPIC_CREDENTIALS_DIR = ANTHROPIC_CONFIG_DIR / "credentials"
+ANTHROPIC_ACTIVE_CONFIG = ANTHROPIC_CONFIG_DIR / "active_config"
+
+OPENCODE_CONFIG = HOME / ".config" / "opencode" / "opencode.json"
+CLINE_MCP_CONFIG = HOME / ".cline" / "mcp_settings.json"
+ROO_MCP_CONFIG = HOME / ".roo" / "mcp_settings.json"
 
 SKILL_ROOTS_DEFAULT = [
     HOME / ".claude" / "skills",
@@ -23,959 +33,42 @@ SKILL_ROOTS_DEFAULT = [
     HOME / ".opencode" / "skills",
 ]
 
+CD_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+CD_OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
+
 DEFAULT_CONFIG = {
-    "claude_desktop_profiles": {},
-    "claude_code_presets": {"z.ai": {}, "standard": {}},
-    "codex_profiles": {},
-    "codex_endpoint": "",
-    "skills_master": str(HOME / ".agents" / "skills"),
-    "skills_targets": [],
-    "custom_roots": [],
-    "scenes": {},
+    "accounts": [],
     "auto_backup": True,
+    "custom_skill_roots": [],
 }
 
-# ============================================================
-# HTML
-# ============================================================
+PROGRAMS = [
+    {"id": "claude-code", "name": "Claude Code", "icon": "claude", "config_path": str(CLAUDE_CODE_SETTINGS), "config_type": "json"},
+    {"id": "codex", "name": "Codex", "icon": "codex", "config_path": str(CODEX_CONFIG), "config_type": "toml"},
+    {"id": "claude-desktop", "name": "Claude Desktop", "icon": "claude-desktop", "config_path": None, "config_type": "json"},
+    {"id": "opencode", "name": "OpenCode", "icon": "opencode", "config_path": str(OPENCODE_CONFIG), "config_type": "json"},
+    {"id": "cline", "name": "Cline", "icon": "cline", "config_path": str(CLINE_MCP_CONFIG), "config_type": "json"},
+    {"id": "roo-code", "name": "Roo Code", "icon": "roo", "config_path": str(ROO_MCP_CONFIG), "config_type": "json"},
+]
 
-html = r"""<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>MultiManager</title>
-<style>
-*{box-sizing:border-box}
-:root{--bg:#0b1020;--card:#131a30;--card2:#18213d;--text:#edf2ff;--muted:#9aa8c7;--accent:#8b5cf6;--accent2:#22c55e;--danger:#ef4444;--warning:#f59e0b;--border:#2a3558}
-body{margin:0;background:radial-gradient(circle at top left,#26335d 0,#0b1020 45%,#080b14 100%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;min-height:100vh}
-.wrap{max-width:1200px;margin:0 auto;padding:24px}
-.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:20px}
-.title{font-size:36px;font-weight:800;letter-spacing:-.04em;background:linear-gradient(135deg,#c4b5fd,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.subtitle{color:var(--muted);font-size:14px;margin-top:6px}
-.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.04);color:#cbd5e1;font-size:13px}
-.tabs{display:flex;gap:4px;margin-bottom:18px;flex-wrap:wrap}
-.tab{padding:10px 20px;border:1px solid var(--border);border-radius:12px 12px 0 0;background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;font-size:14px;font-weight:600;transition:all .15s}
-.tab:hover{background:rgba(139,92,246,.1);color:var(--text)}
-.tab.active{background:var(--accent);color:white;border-color:var(--accent)}
-.tab-content{display:none}
-.tab-content.active{display:block}
-.card{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.025));border:1px solid var(--border);border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 20px 60px rgba(0,0,0,.22);backdrop-filter:blur(12px)}
-.card h2{margin:0 0 14px;font-size:18px;display:flex;align-items:center;gap:10px}
-.card h3{margin:14px 0 8px;font-size:15px;color:#cbd5e1}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.btn{border:0;border-radius:10px;padding:9px 16px;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:13px;transition:all .12s}
-.btn:hover{filter:brightness(1.15)}
-.btn.secondary{background:#24304f;color:#dbe7ff;border:1px solid var(--border)}
-.btn.green{background:var(--accent2);color:#052e16}
-.btn.red{background:var(--danger)}
-.btn.warning{background:var(--warning);color:#1a1a1a}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-sm{padding:5px 10px;font-size:12px}
-input[type=text],input[type=url],input[type=password],select,textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0d1325;color:var(--text);outline:none;font-size:13px}
-input:focus,select:focus,textarea:focus{border-color:var(--accent)}
-label{display:block;color:#cbd5e1;font-size:13px;margin:10px 0 4px}
-.list{display:flex;flex-direction:column;gap:6px;max-height:350px;overflow:auto;padding-right:4px}
-.item{border:1px solid var(--border);background:rgba(10,16,32,.74);border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
-.item .info{flex:1}
-.item .name{font-weight:700;font-size:14px}
-.item .path{font-size:11px;color:var(--muted);word-break:break-all;margin-top:2px}
-.item .tag{font-size:11px;background:var(--accent);color:white;border-radius:999px;padding:2px 8px;margin-left:6px}
-.item .tag.green{background:var(--accent2);color:#052e16}
-.item .tag.warning{background:var(--warning);color:#1a1a1a}
-.item .tag.danger{background:var(--danger)}
-.item .actions{display:flex;gap:6px;flex-shrink:0}
-.dual{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.log{background:#080c16;border:1px solid var(--border);border-radius:12px;padding:14px;font-family:monospace;font-size:12px;white-space:pre-wrap;max-height:300px;overflow:auto;color:#a8b8d8;margin-top:10px;line-height:1.5}
-.footer{text-align:center;color:var(--muted);font-size:12px;margin-top:30px;padding:16px;border-top:1px solid var(--border)}
-code{background:rgba(139,92,246,.15);padding:1px 5px;border-radius:4px;font-size:12px}
-.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
-.status-dot.green{background:var(--accent2)}
-.status-dot.yellow{background:var(--warning)}
-.status-dot.red{background:var(--danger)}
-.empty-state{color:var(--muted);text-align:center;padding:24px;font-size:14px}
-.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
-.modal-overlay.show{display:flex}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;max-width:550px;width:90%;max-height:80vh;overflow:auto}
-.modal h2{margin:0 0 14px}
-.env-row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
-.env-row input{flex:1}
-@media(max-width:700px){.dual,.triple{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="hero">
-    <div><div class="title">MultiManager</div><div class="subtitle">Управление профилями Claude Desktop, Claude Code, Codex + синхронизация skills</div></div>
-    <div class="pill" id="statusBar">готов</div>
-  </div>
-
-  <div class="tabs" id="tabs">
-    <div class="tab active" data-tab="profiles">Профили</div>
-    <div class="tab" data-tab="scenes">Сцены</div>
-    <div class="tab" data-tab="skills">Skills</div>
-    <div class="tab" data-tab="codex-endpoint">Codex endpoint</div>
-    <div class="tab" data-tab="mcp">MCP</div>
-    <div class="tab" data-tab="plugins">Плагины</div>
-    <div class="tab" data-tab="settings">Настройки</div>
-  </div>
-
-  <!-- ========== TAB: PROFILES ========== -->
-  <div class="tab-content active" id="tab-profiles">
-    <div class="dual">
-      <div class="card">
-        <h2><span class="status-dot green"></span>Claude Desktop</h2>
-        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
-          Профили хранятся в <code>~/.multimanager/config.json</code>
-        </p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn btn-sm" onclick="cdSave()">Сохранить текущий</button>
-          <button class="btn btn-sm secondary" onclick="cdRefresh()">Обновить</button>
-        </div>
-        <div id="cdProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-
-      <div class="card">
-        <h2><span class="status-dot green"></span>Claude Code (CLI)</h2>
-        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
-          Пресеты хранятся в <code>~/.multimanager/config.json</code>
-        </p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn btn-sm" onclick="ccSave()">Сохранить текущий как</button>
-          <input id="ccNewName" type="text" placeholder="имя пресета" style="width:140px;display:inline-block;padding:6px 10px">
-          <button class="btn btn-sm secondary" onclick="ccRefresh()">Обновить</button>
-        </div>
-        <div id="ccPresets" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2><span class="status-dot yellow"></span>Codex</h2>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
-        Профили хранятся в <code>~/.multimanager/config.json</code>.
-        Можно импортировать аккаунты из <code>~/.codex/auth.json*</code>.
-      </p>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn btn-sm" onclick="cxSave()">Сохранить текущий как</button>
-        <input id="cxNewName" type="text" placeholder="имя профиля" style="width:140px;display:inline-block;padding:6px 10px">
-        <button class="btn btn-sm secondary" onclick="cxRefresh()">Обновить</button>
-        <button class="btn btn-sm green" onclick="cxImportFromAuth()">+ Из auth.json</button>
-      </div>
-      <div id="cxProfiles" class="list"><div class="empty-state">Загрузка...</div></div>
-    </div>
-  </div>
-
-  <!-- ========== TAB: SCENES ========== -->
-  <div class="tab-content" id="tab-scenes">
-    <div class="dual">
-      <div class="card">
-        <h2><span class="status-dot green"></span>Сцены</h2>
-        <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
-          Сцена = комбинация профилей для всех инструментов сразу.<br>
-          Один клик — переключить Claude Desktop + Claude Code + Codex.
-        </p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn" onclick="sceneSave()">Сохранить текущее как сцену</button>
-          <input id="sceneNewName" type="text" placeholder="имя сцены" style="width:160px;display:inline-block;padding:6px 10px">
-        </div>
-        <div id="scenesList" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-      <div class="card">
-        <h2>Quick Launch</h2>
-        <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
-          Сгенерировать bash-команды для запуска инструментов<br>с текущими профилями прямо из терминала.
-        </p>
-        <button class="btn" onclick="qlGenerate()">Сгенерировать</button>
-        <div id="qlOutput" class="log" style="margin-top:10px">Нажми «Сгенерировать».</div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Быстрое переключение</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0">
-        <code>multimanager scene &lt;name&gt;</code> — CLI-команда для переключения сцены из терминала.<br>
-        Сцена сохраняется в <code>~/.multimanager/config.json</code>.
-      </p>
-    </div>
-  </div>
-
-  <!-- ========== TAB: SKILLS ========== -->
-  <div class="tab-content" id="tab-skills">
-    <div class="dual">
-      <div class="card">
-        <h2>1. Папки со skills</h2>
-        <div class="row">
-          <button class="btn" onclick="skScan()">Сканировать</button>
-          <button class="btn secondary" onclick="skSelectAll()">Выбрать все</button>
-        </div>
-        <label>Добавить папку вручную</label>
-        <div class="row">
-          <input id="skCustomRoot" type="text" placeholder="/path/to/skills" style="flex:1">
-          <button class="btn secondary" onclick="skAddRoot()">Добавить</button>
-        </div>
-        <div id="skRoots" class="list"><div class="empty-state">Нажми «Сканировать»</div></div>
-      </div>
-      <div class="card">
-        <h2>2. Источник (master)</h2>
-        <label>Master skills folder</label>
-        <select id="skSource" style="margin-bottom:12px"></select>
-        <div id="skSkillsList" class="list"><div class="empty-state">Выбери источник</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>3. Синхронизация</h2>
-      <div class="row">
-        <button class="btn green" onclick="skSync(false)">Скопировать skills</button>
-        <button class="btn secondary" onclick="skSync(true)">Dry run</button>
-        <label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px">
-          <input id="skOverwrite" type="checkbox"> backup конфликтов
-        </label>
-        <label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px">
-          <input id="skSymlink" type="checkbox"> symlink (не copy)
-        </label>
-      </div>
-      <p style="font-size:12px;color:var(--muted);margin:8px 0 0">
-        Claude Desktop skills всегда копируются (symlink не работает).
-      </p>
-      <div id="skLog" class="log">Нажми «Сканировать» чтобы начать.</div>
-    </div>
-    <div class="card">
-      <h2>4. Сравнение skills (diff)</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">
-        Сравнить <code>SKILL.md</code> в master и targets. Покажет какие файлы новее и diff.
-      </p>
-      <div class="row">
-        <button class="btn warning" onclick="skDiff()">Сравнить все</button>
-        <button class="btn secondary" onclick="skDiffClear()">Очистить</button>
-      </div>
-      <div id="skDiffResults" class="log" style="margin-top:10px">Нажми «Сравнить все».</div>
-    </div>
-  </div>
-
-  <!-- ========== TAB: CODEX ENDPOINT ========== -->
-  <div class="tab-content" id="tab-codex-endpoint">
-    <div class="card">
-      <h2>Codex Custom API Endpoint</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
-        Укажи кастомный endpoint для Codex, например <code>https://llm.bezrabotnyi.com/v1</code>.
-        Устанавливает <code>OPENAI_BASE_URL</code>.
-      </p>
-      <label>API Endpoint URL</label>
-      <div class="row">
-        <input id="cxEndpoint" type="url" placeholder="https://llm.bezrabotnyi.com/v1" style="flex:1">
-        <button class="btn" onclick="cxSetEndpoint()">Установить</button>
-        <button class="btn secondary" onclick="cxClearEndpoint()">Сбросить</button>
-      </div>
-      <div id="cxEndpointStatus" style="margin-top:10px;font-size:13px">Загрузка...</div>
-    </div>
-    <div class="card">
-      <h2>Codex Wrapper Script</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
-        Создаёт <code>~/.local/bin/codex-wrapper</code> с <code>OPENAI_BASE_URL</code>.
-      </p>
-      <button class="btn" onclick="cxCreateWrapper()">Создать wrapper</button>
-      <div id="cxWrapperStatus" style="margin-top:10px;font-size:13px"></div>
-    </div>
-  </div>
-
-  <!-- ========== TAB: MCP ========== -->
-  <div class="tab-content" id="tab-mcp">
-    <div class="card">
-      <h2>MCP Серверы</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">
-        Все MCP серверы из Claude Desktop, Claude Code и Codex. Можно добавлять, отключать, удалять.
-      </p>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn" onclick="mcpRefresh()">Обновить</button>
-        <button class="btn secondary" onclick="mcpShowAdd()">+ Добавить MCP</button>
-      </div>
-      <div id="mcpAddForm" style="display:none;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
-        <div class="dual">
-          <div><label>Инструмент</label><select id="mcpAddTool" style="margin-bottom:8px"></select></div>
-          <div><label>Имя сервера</label><input id="mcpAddName" type="text" placeholder="my-server"></div>
-        </div>
-        <div class="dual">
-          <div><label>Тип</label><select id="mcpAddType"><option value="stdio">stdio</option><option value="http">HTTP</option></select></div>
-          <div id="mcpAddStdioFields"><label>Команда</label><input id="mcpAddCommand" type="text" placeholder="npx"></div>
-          <div id="mcpAddUrlField" style="display:none"><label>URL</label><input id="mcpAddUrl" type="url" placeholder="https://..."></div>
-        </div>
-        <label>Аргументы (через запятую или каждый на новой строке)</label>
-        <textarea id="mcpAddArgs" rows="2" placeholder="-y, package@latest"></textarea>
-        <div class="row" style="margin-top:10px">
-          <button class="btn green" onclick="mcpAdd()">Добавить</button>
-          <button class="btn secondary" onclick="mcpHideAdd()">Отмена</button>
-        </div>
-      </div>
-      <div id="mcpList" class="list"><div class="empty-state">Загрузка...</div></div>
-    </div>
-  </div>
-
-  <!-- ========== TAB: PLUGINS ========== -->
-  <div class="tab-content" id="tab-plugins">
-    <div class="dual">
-      <div class="card">
-        <h2>Claude Code Плагины</h2>
-        <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Плагины из <code>~/.claude/settings.json</code></p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn btn-sm" onclick="plCcRefresh()">Обновить</button>
-        </div>
-        <div id="plCcList" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-      <div class="card">
-        <h2>Codex Плагины</h2>
-        <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Плагины из <code>~/.codex/config.toml</code></p>
-        <div class="row" style="margin-bottom:10px">
-          <button class="btn btn-sm" onclick="plCxRefresh()">Обновить</button>
-        </div>
-        <div id="plCxList" class="list"><div class="empty-state">Загрузка...</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Plugin Marketplaces (Claude Code)</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Зарегистрированные marketplace-и для Claude Code плагинов.</p>
-      <div id="plMarketplaces" class="list"><div class="empty-state">Загрузка...</div></div>
-    </div>
-  </div>
-
-  <!-- ========== TAB: SETTINGS ========== -->
-  <div class="tab-content" id="tab-settings">
-    <div class="dual">
-      <div class="card">
-        <h2>Куда указывают пути</h2>
-        <div style="font-size:13px">
-          <div><b>Claude Desktop:</b> <code id="cfgCdPath"></code></div>
-          <div><b>Claude Code:</b> <code id="cfgCcPath"></code></div>
-          <div><b>Codex:</b> <code id="cfgCxPath"></code></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Хранилище MultiManager</h2>
-        <p style="font-size:13px;color:var(--muted)">
-          Все профили, пресеты, сцены и настройки хранятся в <code>~/.multimanager/config.json</code>.<br>
-          Бэкапы — в <code>~/.multimanager/backups/</code>.<br>
-          MultiManager не хранит копии ваших API-ключей отдельно — всё читается из конфигов инструментов.
-        </p>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Прокси</h2>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 10px">
-        Прокси будет применяться ко всем MCP серверам при переключении профиля.
-      </p>
-      <div class="dual">
-        <div><label>HTTP_PROXY</label><input id="cfgHttpProxy" type="text" placeholder="http://127.0.0.1:8080" style="font-size:13px"></div>
-        <div><label>HTTPS_PROXY</label><input id="cfgHttpsProxy" type="text" placeholder="http://127.0.0.1:8080" style="font-size:13px"></div>
-      </div>
-      <label>NO_PROXY (через запятую)</label>
-      <input id="cfgNoProxy" type="text" placeholder="localhost,127.0.0.1,.local" style="font-size:13px">
-      <div class="row" style="margin-top:10px">
-        <button class="btn btn-sm green" onclick="saveProxy()">Сохранить прокси</button>
-        <span id="proxyStatus" style="font-size:12px;color:var(--muted)"></span>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Auto-backup</h2>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
-        При переключении профиля текущее состояние авто-бэкапится.
-      </p>
-      <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:14px">
-        <input id="cfgAutoBackup" type="checkbox" onchange="toggleAutoBackup()"> Авто-бэкап включён
-      </label>
-      <div style="margin-top:10px">
-        <button class="btn btn-sm secondary" onclick="backupNow()">Создать бэкап сейчас</button>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Бэкапы</h2>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn btn-sm" onclick="listBackups()">Обновить список</button>
-      </div>
-      <div id="backupsList" class="list"><div class="empty-state">Загрузка...</div></div>
-    </div>
-    <div class="card">
-      <h2>Claude Desktop — перенос данных</h2>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">
-        Копировать IndexedDB (разговоры, проекты, память) и Local Storage между Claude Desktop instances.<br>
-        <b>Важно:</b> Claude Desktop должен быть закрыт перед копированием.
-      </p>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn btn-sm" onclick="cdDataRefresh()">Обновить</button>
-      </div>
-      <div id="cdDataInfo" class="list"><div class="empty-state">Загрузка...</div></div>
-    </div>
-    <div class="card">
-      <h2>О приложении</h2>
-      <p style="font-size:13px;color:var(--muted)">
-        MultiManager v1.1 — локальное приложение. Ничего никуда не отправляет.<br>
-        Конфиг: <code>~/.multimanager/config.json</code><br>
-        Бэкапы: <code>~/.multimanager/backups/</code>
-      </p>
-    </div>
-  </div>
-
-  <div class="footer">MultiManager • локально • v1.1</div>
-</div>
-
-<!-- ===== ENV EDITOR MODAL ===== -->
-<div id="envModal" class="modal-overlay">
-  <div class="modal">
-    <h2>Env vars: <span id="envModalTitle"></span></h2>
-    <div id="envEditorContainer"></div>
-    <div class="row" style="margin-top:14px;justify-content:flex-end">
-      <button class="btn secondary" onclick="closeEnvModal()">Отмена</button>
-      <button class="btn green" onclick="saveEnvVars()">Сохранить</button>
-    </div>
-  </div>
-</div>
-
-<script>
-let envEditPreset = null;
-
-function log(id,msg){const el=document.getElementById(id);if(el)el.textContent=msg}
-function setStatus(t){document.getElementById('statusBar').textContent=t}
-
-async function api(path,body=null){
-  const opts={method:body?'POST':'GET',headers:{'Content-Type':'application/json'}}
-  if(body)opts.body=JSON.stringify(body)
-  const r=await fetch(path,opts);return await r.json()
-}
-
-// ===== TABS =====
-document.querySelectorAll('.tab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'))
-    document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'))
-    tab.classList.add('active')
-    const t=tab.dataset.tab
-    document.getElementById('tab-'+t).classList.add('active')
-    if(t==='mcp')mcpRefresh()
-    if(t==='plugins'){plCcRefresh();plCxRefresh()}
-  })
-})
-
-// ===== CLAUDE DESKTOP PROFILES =====
-async function cdRefresh(){
-  setStatus('загрузка...');const data=await api('/api/cd-profiles');renderCdProfiles(data);setStatus('готов')
-}
-function renderCdProfiles(data){
-  const el=document.getElementById('cdProfiles');el.innerHTML=''
-  if(!data.instances||data.instances.length===0){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
-  data.instances.forEach(inst=>{
-    const div=document.createElement('div');div.className='item'
-    const activeDot=inst.active?'<span class="status-dot green"></span>':'<span class="status-dot"></span>'
-    let ph=''
-    if(inst.profiles&&inst.profiles.length>0){
-      inst.profiles.forEach(p=>{
-        const act=p.active?'<span class="status-dot green"></span>':''
-        ph+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-          <span>${act}${esc(p.name)}</span>
-          <div class="actions">
-            <button class="btn btn-sm ${p.active?'green':'secondary'}" onclick="cdUse('${esc(inst.name)}','${esc(p.name)}')">${p.active?'активен':'Switch'}</button>
-            <button class="btn btn-sm red" onclick="cdDelete('${esc(inst.name)}','${esc(p.name)}')">×</button>
-          </div>
-        </div>`
-      })
-    }
-    div.innerHTML=`<div class="info"><div class="name">${activeDot}${esc(inst.name)} <span class="tag">${inst.profiles?inst.profiles.length:0}</span></div>
-      <div class="path">${esc(inst.path)}</div>${ph}</div>
-      <div class="actions" style="flex-direction:column;gap:4px">
-        <button class="btn btn-sm" onclick="cdSaveInstance('${esc(inst.name)}')">Save</button>
-        <button class="btn btn-sm secondary" onclick="cdRefresh()">⟳</button>
-      </div>`
-    el.appendChild(div)
-  })
-}
-async function cdSaveInstance(instanceName){
-  const name=prompt('Имя профиля для '+instanceName+':');if(!name)return
-  setStatus('сохранение...');await api('/api/cd-save-instance',{instance:instanceName,name});cdRefresh();setStatus('готов')
-}
-async function cdUse(instanceName,profileName){
-  setStatus('переключение...');await api('/api/cd-use',{instance:instanceName,profile:profileName});cdRefresh();setStatus('готов')
-}
-async function cdDelete(instanceName,profileName){
-  if(!confirm('Удалить профиль "'+profileName+'" из '+instanceName+'?'))return
-  await api('/api/cd-delete',{instance:instanceName,profile:profileName});cdRefresh()
-}
-
-// ===== CLAUDE CODE PRESETS =====
-async function ccRefresh(){
-  setStatus('загрузка...');const data=await api('/api/cc-presets');renderCcPresets(data);setStatus('готов')
-}
-function renderCcPresets(data){
-  const el=document.getElementById('ccPresets');el.innerHTML=''
-  const presets=data.presets||[];const currentName=data.current||''
-  if(presets.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет пресетов</div>';return}
-  if(!currentName && presets.length>0){
-    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
-    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним сохранённым пресетом. Сохрани текущее состояние как пресет, чтобы не потерять.'
-    el.appendChild(info)
-  }
-  presets.sort((a,b)=>a.name.localeCompare(b.name))
-  presets.forEach(p=>{
-    const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
-    const envCount=p.env_count?`env: ${p.env_count} vars`:p.endpoint?p.endpoint:''
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<div class="info"><div class="name">${dot}${esc(p.name)}</div>
-      <div class="path">${p.model?'model: '+esc(p.model):''} ${envCount?'| '+esc(envCount):''}</div></div>
-      <div class="actions">
-        <button class="btn btn-sm warning" onclick="openEnvEditor('${esc(p.name)}')" title="Edit env vars">⚙</button>
-        ${act?'<span class="tag green">активен</span>':`<button class="btn btn-sm secondary" onclick="ccUse('${esc(p.name)}')">Switch</button>`}
-        <button class="btn btn-sm red" onclick="ccDelete('${esc(p.name)}')">×</button>
-      </div>`
-    el.appendChild(div)
-  })
-}
-async function ccSave(){
-  const name=document.getElementById('ccNewName').value.trim()
-  if(!name){alert('Введи имя пресета');return}
-  setStatus('сохранение...');await api('/api/cc-save',{name});ccRefresh();setStatus('готов')
-  document.getElementById('ccNewName').value=''
-}
-async function ccUse(name){setStatus('переключение...');await api('/api/cc-use',{name});ccRefresh();setStatus('готов')}
-async function ccDelete(name){if(!confirm('Удалить пресет "'+name+'"?'))return;await api('/api/cc-delete',{name});ccRefresh()}
-
-// ===== ENV VARS EDITOR =====
-async function openEnvEditor(presetName){
-  envEditPreset=presetName
-  document.getElementById('envModalTitle').textContent=presetName
-  const data=await api('/api/cc-preset-env?name='+encodeURIComponent(presetName))
-  const env=data.env||{}
-  const container=document.getElementById('envEditorContainer');container.innerHTML=''
-  const keys=Object.keys(env)
-  if(keys.length===0){
-    container.innerHTML='<div class="empty-state" style="padding:12px">Нет env vars. Добавь ниже.</div>'
-  }
-  keys.forEach(k=>{
-    const row=document.createElement('div');row.className='env-row'
-    row.innerHTML=`<input class="env-key" value="${esc(k)}" placeholder="KEY"><input class="env-val" value="${esc(env[k])}" placeholder="value"><button class="btn btn-sm red" onclick="this.parentElement.remove()">×</button>`
-    container.appendChild(row)
-  })
-  const addBtn=document.createElement('button');addBtn.className='btn btn-sm secondary';addBtn.textContent='+ Добавить var'
-  addBtn.onclick=()=>{
-    const row=document.createElement('div');row.className='env-row'
-    row.innerHTML=`<input class="env-key" placeholder="KEY"><input class="env-val" placeholder="value"><button class="btn btn-sm red" onclick="this.parentElement.remove()">×</button>`
-    container.appendChild(row)
-  }
-  container.appendChild(addBtn)
-  document.getElementById('envModal').classList.add('show')
-}
-function closeEnvModal(){document.getElementById('envModal').classList.remove('show')}
-async function saveEnvVars(){
-  const rows=document.querySelectorAll('#envEditorContainer .env-row:not(:last-child)')
-  const env={}
-  rows.forEach(r=>{
-    const k=r.querySelector('.env-key').value.trim()
-    const v=r.querySelector('.env-val').value.trim()
-    if(k)env[k]=v
-  })
-  if(!envEditPreset)return
-  await api('/api/cc-preset-env',{name:envEditPreset,env})
-  closeEnvModal();ccRefresh()
-}
-
-// ===== CODEX PROFILES =====
-async function cxRefresh(){
-  setStatus('загрузка...');const data=await api('/api/cx-profiles');renderCxProfiles(data);setStatus('готов')
-}
-function renderCxProfiles(data){
-  const el=document.getElementById('cxProfiles');el.innerHTML=''
-  const profiles=data.profiles||[];const currentName=data.current||''
-  if(profiles.length===0&&!currentName){el.innerHTML='<div class="empty-state">Нет профилей</div>';return}
-  if(!currentName && profiles.length>0){
-    const info=document.createElement('div');info.style.cssText='padding:8px 12px;margin-bottom:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);border-radius:10px;font-size:13px'
-    info.innerHTML='⚠ Текущие настройки не совпадают ни с одним профилем. Сохрани как профиль.'
-    el.appendChild(info)
-  }
-  profiles.sort((a,b)=>a.name.localeCompare(b.name))
-  profiles.forEach(p=>{
-    const act=p.active||p.name===currentName;const dot=act?'<span class="status-dot green"></span>':''
-    const planInfo=p.plan?`<span class="tag" style="background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.3)">${esc(p.plan)}</span>`:''
-    const subInfo=p.subscription_until?`<span style="font-size:11px;color:var(--muted)">до ${esc(p.subscription_until)}</span>`:''
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<div class="info"><div class="name">${dot}${esc(p.name)}${p.model?' <span style="color:var(--muted)">— '+esc(p.model)+'</span>':''}</div>
-      <div class="path" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        ${planInfo} ${subInfo}
-        ${p.email?'<span style="font-size:11px;color:var(--muted)">'+esc(p.email)+'</span>':''}
-      </div></div>
-      <div class="actions">
-        <button class="btn btn-sm warning" onclick="cxRename('${esc(p.name)}')" title="Переименовать">✎</button>
-        ${act?'<span class="tag green">активен</span>':`<button class="btn btn-sm secondary" onclick="cxUse('${esc(p.name)}')">Switch</button>`}
-        <button class="btn btn-sm red" onclick="cxDelete('${esc(p.name)}')">×</button>
-      </div>`
-    el.appendChild(div)
-  })
-}
-async function cxSave(){
-  const name=document.getElementById('cxNewName').value.trim()
-  if(!name){alert('Введи имя профиля');return}
-  setStatus('сохранение...');await api('/api/cx-save',{name});cxRefresh();setStatus('готов')
-  document.getElementById('cxNewName').value=''
-}
-async function cxUse(name){setStatus('переключение...');await api('/api/cx-use',{name});cxRefresh();setStatus('готов')}
-async function cxDelete(name){if(!confirm('Удалить профиль Codex "'+name+'"?'))return;await api('/api/cx-delete',{name});cxRefresh()}
-async function cxRename(name){
-  const newName=prompt('Новое имя для профиля "'+name+'":',name)
-  if(!newName||newName===name)return
-  setStatus('переименование...');await api('/api/cx-rename',{name,new_name:newName});cxRefresh();setStatus('готов')
-}
-async function cxImportFromAuth(){
-  setStatus('импорт...');const r=await api('/api/cx-import-auth')
-  if(r.profiles) cxRefresh()
-  setStatus(r.error||`импортировано ${r.profiles||0} профилей`)
-}
-
-// ===== CODEX ENDPOINT =====
-async function cxEndpointStatus(){
-  const data=await api('/api/cx-endpoint-status')
-  const el=document.getElementById('cxEndpointStatus')
-  if(data.current){el.innerHTML='<span class="status-dot green"></span> Текущий: <code>'+esc(data.current)+'</code>';document.getElementById('cxEndpoint').value=data.current}
-  else{el.innerHTML='<span class="status-dot"></span> Не установлен (стандартный OpenAI API)'}
-}
-async function cxSetEndpoint(){const url=document.getElementById('cxEndpoint').value.trim();if(!url){alert('Введи URL');return}
-  setStatus('установка...');await api('/api/cx-set-endpoint',{url});cxEndpointStatus();setStatus('готов')}
-async function cxClearEndpoint(){await api('/api/cx-clear-endpoint');cxEndpointStatus()}
-async function cxCreateWrapper(){
-  setStatus('создание...');const data=await api('/api/cx-create-wrapper')
-  document.getElementById('cxWrapperStatus').innerHTML=data.error?'<span class="status-dot red"></span> '+esc(data.error):'<span class="status-dot green"></span> '+esc(data.message||'')
-  setStatus('готов')
-}
-
-// ===== SKILLS =====
-async function skScan(){setStatus('сканирование...');const data=await api('/api/sk-scan');renderSkRoots(data);setStatus('готов')}
-function renderSkRoots(data){
-  const el=document.getElementById('skRoots');el.innerHTML=''
-  const sel=document.getElementById('skSource');const old=sel.value;sel.innerHTML=''
-  ;(data.roots||[]).forEach(r=>{
-    const opt=document.createElement('option');opt.value=r.path;opt.textContent=r.label+' — '+r.skill_count+' skills';sel.appendChild(opt)
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<input type="checkbox" class="sk-target" data-path="${esc(r.path)}" ${r.isTarget?'checked':''}>
-      <div class="info"><div class="name">${esc(r.label)} <span class="tag">${r.skill_count}</span></div><div class="path">${esc(r.path)}</div></div>`
-    el.appendChild(div)
-  })
-  if(old&&[...sel.options].some(o=>o.value===old))sel.value=old
-  sel.onchange=skLoadSkills;skLoadSkills()
-  if(data.roots)document.getElementById('skLog').textContent='Найдено папок: '+data.roots.length
-}
-async function skAddRoot(){const p=document.getElementById('skCustomRoot').value.trim();if(!p)return
-  setStatus('добавление...');const data=await api('/api/sk-add-root',{path:p});renderSkRoots(data);setStatus('готов')}
-async function skLoadSkills(){
-  const src=document.getElementById('skSource').value;const el=document.getElementById('skSkillsList');el.innerHTML=''
-  if(!src){el.innerHTML='<div class="empty-state">Выбери источник</div>';return}
-  const data=await api('/api/sk-skills?root='+encodeURIComponent(src))
-  ;(data.skills||[]).forEach(s=>{
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<input type="checkbox" class="sk-skill" data-name="${esc(s.name)}" checked><div class="info"><div class="name">${esc(s.name)}</div><div class="path">${esc(s.path)}</div></div>`
-    el.appendChild(div)
-  })
-}
-function skSelectAll(){document.querySelectorAll('.sk-target').forEach(x=>x.checked=true)}
-async function skSync(dryRun){
-  const source=document.getElementById('skSource').value
-  if(!source||![...document.querySelectorAll('.sk-target:checked')].length){alert('Выбери источник и target');return}
-  const targets=[...document.querySelectorAll('.sk-target:checked')].map(x=>x.dataset.path).filter(p=>p!==source)
-  const skills=[...document.querySelectorAll('.sk-skill:checked')].map(x=>x.dataset.name)
-  const overwrite=document.getElementById('skOverwrite').checked;const useSymlink=document.getElementById('skSymlink').checked
-  setStatus(dryRun?'dry run...':'sync...');const data=await api('/api/sk-sync',{source,targets,skills,overwrite,dry_run:dryRun,use_symlink:useSymlink})
-  document.getElementById('skLog').textContent=data.log||'Ошибка';setStatus(data.ok?'готово':'ошибка')
-}
-
-// ===== SCENES =====
-async function scenesRefresh(){setStatus('загрузка...');const data=await api('/api/scenes');renderScenes(data);setStatus('готов')}
-function renderScenes(data){
-  const el=document.getElementById('scenesList');el.innerHTML=''
-  const scenes=data.scenes||[]
-  if(!scenes.length){el.innerHTML='<div class="empty-state">Нет сцен. Сохрани текущие профили как сцену.</div>';return}
-  scenes.forEach(s=>{
-    const div=document.createElement('div');div.className='item'
-    let details=''
-    if(s.cc_preset)details+='CC: '+esc(s.cc_preset)+' '
-    if(s.cx_profile)details+='CX: '+esc(s.cx_profile)+' '
-    if(s.cd_profiles){const names=Object.values(s.cd_profiles);if(names.length)details+='CD: '+esc(names.join(', '))}
-    div.innerHTML=`<div class="info"><div class="name">🎬 ${esc(s.name)}</div><div class="path">${details||'нет профилей'}</div></div>
-      <div class="actions">
-        <button class="btn btn-sm green" onclick="sceneApply('${esc(s.name)}')">Apply</button>
-        <button class="btn btn-sm red" onclick="sceneDelete('${esc(s.name)}')">×</button>
-      </div>`
-    el.appendChild(div)
-  })
-}
-async function sceneSave(){
-  const name=document.getElementById('sceneNewName').value.trim()
-  if(!name){alert('Введи имя сцены');return}
-  setStatus('сохранение...');await api('/api/scenes-save',{name});scenesRefresh();setStatus('готов')
-  document.getElementById('sceneNewName').value=''
-}
-async function sceneApply(name){setStatus('применение...');const d=await api('/api/scenes-apply',{name});scenesRefresh();cdRefresh();ccRefresh();cxRefresh();setStatus(d.error||'готов')}
-async function sceneDelete(name){if(!confirm('Удалить сцену "'+name+'"?'))return;await api('/api/scenes-delete',{name});scenesRefresh()}
-
-// ===== QUICK LAUNCH =====
-async function qlGenerate(){setStatus('генерация...');const data=await api('/api/quick-launch');document.getElementById('qlOutput').textContent=data.script||'Ошибка';setStatus('готов')}
-
-// ===== BACKUPS =====
-async function listBackups(){const data=await api('/api/backups');renderBackups(data)}
-function renderBackups(data){
-  const el=document.getElementById('backupsList');el.innerHTML=''
-  const backups=data.backups||[]
-  if(!backups.length){el.innerHTML='<div class="empty-state">Нет бэкапов</div>';return}
-  backups.forEach(b=>{
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<div class="info"><div class="name">${esc(b.name)}</div><div class="path">${b.date} | ${b.size}</div></div>
-      <div class="actions">
-        <button class="btn btn-sm warning" onclick="backupRestore('${esc(b.name)}')">Restore</button>
-        <button class="btn btn-sm red" onclick="backupDelete('${esc(b.name)}')">×</button>
-      </div>`
-    el.appendChild(div)
-  })
-}
-async function backupNow(){const data=await api('/api/backup-now');listBackups();setStatus(data.error||'бэкап создан')}
-async function backupRestore(name){if(!confirm('Восстановить бэкап "'+name+'"?'))return;await api('/api/backup-restore',{name});cdRefresh();ccRefresh();cxRefresh()}
-async function backupDelete(name){if(!confirm('Удалить бэкап "'+name+'"?'))return;await api('/api/backup-delete',{name});listBackups()}
-async function toggleAutoBackup(){const v=document.getElementById('cfgAutoBackup').checked;await api('/api/set-auto-backup',{enabled:v})}
-
-// ===== PROXY =====
-async function saveProxy(){
-  const httpProxy=document.getElementById('cfgHttpProxy').value.trim()
-  const httpsProxy=document.getElementById('cfgHttpsProxy').value.trim()
-  const noProxy=document.getElementById('cfgNoProxy').value.trim()
-  setStatus('сохранение...')
-  const r=await api('/api/set-proxy',{http_proxy:httpProxy,https_proxy:httpsProxy,no_proxy:noProxy})
-  document.getElementById('proxyStatus').textContent=r.message||''
-  setStatus('готов')
-}
-
-// ===== SKILL DIFF =====
-async function skDiff(){
-  setStatus('сравнение...')
-  const source=document.getElementById('skSource').value
-  if(!source){document.getElementById('skDiffResults').textContent='Выбери источник мастер';setStatus('готов');return}
-  const targets=[...document.querySelectorAll('.sk-target:checked')].map(x=>x.dataset.path).filter(p=>p!==source)
-  if(!targets.length){document.getElementById('skDiffResults').textContent='Выбери target';setStatus('готов');return}
-  const data=await api('/api/sk-diff',{master:source,targets})
-  const el=document.getElementById('skDiffResults');el.innerHTML=''
-  if(!data.diffs||!data.diffs.length){el.textContent='Все skills одинаковы.';setStatus('готов');return}
-  data.diffs.forEach(d=>{
-    const div=document.createElement('div');div.style.marginBottom='12px';div.style.border='1px solid var(--border)';div.style.borderRadius='8px';div.style.padding='10px'
-    const header=document.createElement('div');header.style.display='flex';header.style.justifyContent='space-between';header.style.alignItems='center';header.style.marginBottom='6px'
-    const newerIcon=d.newer==='target'?'🔄':'✓'
-    const newerLabel=d.newer==='target'?'новее в target':'актуален'
-    header.innerHTML=`<b>${esc(d.name)}</b> <span>${newerIcon} ${newerLabel} | ${esc(d.source_root)}</span>`
-    div.appendChild(header)
-    if(d.newer==='target'&&d.diff_lines&&d.diff_lines.length){
-      const diffPre=document.createElement('pre');diffPre.style.fontSize='11px';diffPre.style.lineHeight='1.4';diffPre.style.margin='4px 0'
-      diffPre.textContent=d.diff_lines.slice(0,60).join('\n')
-      div.appendChild(diffPre)
-      if(d.diff_lines.length>60)div.innerHTML+='<div style="color:var(--muted);font-size:11px">...и ещё '+(d.diff_lines.length-60)+' строк</div>'
-      const btn=document.createElement('button');btn.className='btn btn-sm green';btn.textContent='Обновить master из target'
-      btn.onclick=async()=>{
-        setStatus('обновление...')
-        await api('/api/sk-sync-one',{source:d.source_path,dest:d.master_path})
-        el.innerHTML='<div style="color:var(--accent2)">✓ '+esc(d.name)+' обновлён в master</div>'
-        setStatus('готов')
-      }
-      div.appendChild(btn)
-    }
-    el.appendChild(div)
-  })
-  setStatus('готов')
-}
-function skDiffClear(){document.getElementById('skDiffResults').innerHTML='Очищено.'}
-
-// ===== CD DATA MANAGEMENT =====
-async function cdDataRefresh(){
-  setStatus('загрузка...');const data=await api('/api/cd-data-info');renderCdData(data);setStatus('готов')
-}
-function renderCdData(data){
-  const el=document.getElementById('cdDataInfo');el.innerHTML=''
-  if(!data.instances||!data.instances.length){el.innerHTML='<div class="empty-state">Нет instances</div>';return}
-  data.instances.forEach(inst=>{
-    const div=document.createElement('div');div.className='item'
-    let dbsHtml=''
-    if(inst.databases&&inst.databases.length){
-      inst.databases.forEach(db=>{
-        dbsHtml+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,.04)">
-          <span>${esc(db.name)}</span>
-          <span style="color:var(--muted)">${db.size}</span>
-        </div>`
-      })
-    }
-    div.innerHTML=`<div class="info"><div class="name">${esc(inst.name)}</div>
-      <div class="path">${inst.size_total}</div>${dbsHtml}</div>
-      <div class="actions" style="flex-direction:column;gap:4px">`
-    const actionsDiv=div.querySelector('.actions')
-    const allInstances=document.querySelectorAll('#cdDataInfo .item')
-    data.instances.forEach(other=>{
-      if(other.name===inst.name)return
-      const copyBtn=document.createElement('button');copyBtn.className='btn btn-sm warning';copyBtn.textContent='← из '+esc(other.name)
-      copyBtn.onclick=async()=>{
-        if(!confirm('Копировать IndexedDB (разговоры/проекты/память) из "'+other.name+'" в "'+inst.name+'"? Claude Desktop должен быть закрыт.'))return
-        setStatus('копирование...')
-        const r=await api('/api/cd-copy-data',{from:other.name,to:inst.name,databases:['IndexedDB']})
-        cdDataRefresh();setStatus(r.error||'готов')
-      }
-      actionsDiv.appendChild(copyBtn)
-    })
-    el.appendChild(div)
-  })
-}
-
-// ===== MCP MANAGEMENT =====
-async function mcpRefresh(){
-  setStatus('загрузка...');const data=await api('/api/mcp-list');renderMcp(data);setStatus('готов')
-}
-function renderMcp(data){
-  const el=document.getElementById('mcpList');el.innerHTML=''
-  const servers=data.servers||[]
-  if(!servers.length){el.innerHTML='<div class="empty-state">Нет MCP серверов</div>';return}
-  const groups={}
-  servers.forEach(s=>{
-    const key=s.source+'|'+s.instance
-    if(!groups[key])groups[key]=[]
-    groups[key].push(s)
-  })
-  Object.entries(groups).forEach(([key,items])=>{
-    const first=items[0]
-    const groupDiv=document.createElement('div');groupDiv.style.marginBottom='8px';groupDiv.style.border='1px solid var(--border)';groupDiv.style.borderRadius='12px';groupDiv.style.padding='8px 12px'
-    const header=document.createElement('div');header.style.display='flex';header.style.justifyContent='space-between';header.style.alignItems='center';header.style.marginBottom='6px'
-    header.innerHTML=`<span style="font-weight:600;font-size:13px">${esc(first.sourceIcon)} ${esc(first.source)}${first.instance?' — '+esc(first.instance):''}</span><span style="font-size:11px;color:var(--muted)">${items.length} серверов</span>`
-    groupDiv.appendChild(header)
-    items.forEach(s=>{
-      const cmd=s.type==='http'?s.url:(s.command+(s.args&&s.args.length?' '+esc(s.args.join(' ')):''))
-      const item=document.createElement('div');item.style.display='flex';item.style.justifyContent='space-between';item.style.alignItems='center';item.style.padding='4px 0';item.style.borderBottom='1px solid rgba(255,255,255,.04)'
-      item.innerHTML=`<div><span style="font-weight:600;font-size:13px">${esc(s.name)}</span><span style="font-size:11px;color:var(--muted);margin-left:8px">${s.type||'stdio'}</span>
-        <div style="font-size:11px;color:var(--muted)">${esc(cmd.substr(0,80))}${cmd.length>80?'…':''}</div></div>
-        <div class="actions" style="gap:4px">
-          ${s.source==='Codex'?`<button class="btn btn-sm ${s.enabled?'green':'secondary'}" onclick="mcpToggle('${esc(s.name)}','${esc(s.source)}','${esc(s.instance||'')}')">${s.enabled?'ON':'OFF'}</button>`:''}
-          <button class="btn btn-sm red" onclick="mcpDelete('${esc(s.name)}','${esc(s.source)}','${esc(s.instance||'')}')">×</button>
-        </div>`
-      groupDiv.appendChild(item)
-    })
-    el.appendChild(groupDiv)
-  })
-  // Populate add form tool selector
-  const sel=document.getElementById('mcpAddTool');sel.innerHTML=''
-  data.tools.forEach(t=>{
-    const opt=document.createElement('option');opt.value=t.key;opt.textContent=t.label;sel.appendChild(opt)
-  })
-}
-function mcpShowAdd(){document.getElementById('mcpAddForm').style.display='block'}
-function mcpHideAdd(){document.getElementById('mcpAddForm').style.display='none'}
-document.addEventListener('change',function(e){
-  if(e.target.id==='mcpAddType'){
-    const isHttp=e.target.value==='http'
-    document.getElementById('mcpAddStdioFields').style.display=isHttp?'none':'block'
-    document.getElementById('mcpAddUrlField').style.display=isHttp?'block':'none'
-  }
-})
-async function mcpAdd(){
-  const tool=document.getElementById('mcpAddTool').value
-  const name=document.getElementById('mcpAddName').value.trim()
-  const type=document.getElementById('mcpAddType').value
-  const command=document.getElementById('mcpAddCommand').value.trim()
-  const url=document.getElementById('mcpAddUrl').value.trim()
-  const argsRaw=document.getElementById('mcpAddArgs').value
-  if(!name||(type==='stdio'&&!command)||(type==='http'&&!url)){alert('Заполни обязательные поля');return}
-  const args=argsRaw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean)
-  setStatus('добавление...')
-  const data=await api('/api/mcp-add',{tool,name,type,command,args,url})
-  mcpRefresh();setStatus(data.error||'готов')
-  if(!data.error)mcpHideAdd()
-}
-async function mcpDelete(name,source,instance){
-  if(!confirm('Удалить MCP "'+name+'" из '+source+(instance?' ('+instance+')':'')+'?'))return
-  setStatus('удаление...');await api('/api/mcp-delete',{name,source,instance});mcpRefresh();setStatus('готов')
-}
-async function mcpToggle(name,source,instance){
-  setStatus('переключение...');await api('/api/mcp-toggle',{name,source,instance});mcpRefresh();setStatus('готов')
-}
-
-// ===== PLUGINS =====
-async function plCcRefresh(){
-  setStatus('загрузка...');const data=await api('/api/plugins-cc');renderPlCc(data);setStatus('готов')
-}
-function renderPlCc(data){
-  const el=document.getElementById('plCcList');el.innerHTML=''
-  const plugins=data.plugins||[]
-  if(!plugins.length){el.innerHTML='<div class="empty-state">Нет плагинов</div>';return}
-  plugins.forEach(p=>{
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<div class="info"><div class="name">${p.enabled?'<span class="status-dot green"></span>':'<span class="status-dot"></span>'}${esc(p.name)}</div>
-      <div class="path">${p.marketplace||''}</div></div>
-      <div class="actions">
-        <button class="btn btn-sm ${p.enabled?'green':'secondary'}" onclick="plCcToggle('${esc(p.name)}')">${p.enabled?'ON':'OFF'}</button>
-      </div>`
-    el.appendChild(div)
-  })
-  // Marketplaces
-  const mel=document.getElementById('plMarketplaces');mel.innerHTML=''
-  const mps=data.marketplaces||[]
-  if(mps.length){
-    mps.forEach(m=>{
-      const d=document.createElement('div');d.className='item'
-      d.innerHTML=`<div class="info"><div class="name">${esc(m.name)}</div><div class="path">${esc(m.source||'')}</div></div>`
-      mel.appendChild(d)
-    })
-  }else{mel.innerHTML='<div class="empty-state">Нет marketplace-ов</div>'}
-}
-async function plCcToggle(name){
-  setStatus('переключение...');await api('/api/plugins-cc-toggle',{name});plCcRefresh();setStatus('готов')
-}
-async function plCxRefresh(){setStatus('загрузка...')
-  const data=await api('/api/plugins-cx');renderPlCx(data);setStatus('готов')
-}
-function renderPlCx(data){
-  const el=document.getElementById('plCxList');el.innerHTML=''
-  const plugins=data.plugins||[]
-  if(!plugins.length){el.innerHTML='<div class="empty-state">Нет плагинов</div>';return}
-  plugins.forEach(p=>{
-    const div=document.createElement('div');div.className='item'
-    div.innerHTML=`<div class="info"><div class="name">${p.enabled?'<span class="status-dot green"></span>':'<span class="status-dot"></span>'}${esc(p.name)}</div></div>
-      <div class="actions">
-        <button class="btn btn-sm green" onclick="plCxToggle('${esc(p.name)}')">Toggle</button>
-      </div>`
-    el.appendChild(div)
-  })
-}
-async function plCxToggle(name){
-  setStatus('переключение...');await api('/api/plugins-cx-toggle',{name});plCxRefresh();setStatus('готов')
-}
-
-// ===== UTILS =====
-function esc(s){if(!s)return '';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-
-// ===== INIT =====
-async function init(){
-  cdRefresh();ccRefresh();cxRefresh();cxEndpointStatus();scenesRefresh()
-  const cfg=await api('/api/get-settings')
-  document.getElementById('cfgAutoBackup').checked=cfg.auto_backup!==false
-  document.getElementById('cfgCdPath').textContent=document.location.origin+'/api/cd-config-path'
-  document.getElementById('cfgCcPath').textContent=document.location.origin+'/api/cc-config-path'
-  document.getElementById('cfgCxPath').textContent=document.location.origin+'/api/cx-config-path'
-  if(cfg.proxy){
-    document.getElementById('cfgHttpProxy').value=cfg.proxy.http_proxy||''
-    document.getElementById('cfgHttpsProxy').value=cfg.proxy.https_proxy||''
-    document.getElementById('cfgNoProxy').value=cfg.proxy.no_proxy||''
-  }
-}
-init()
-</script>
-</body></html>"""
-
-# ============================================================
-# BACKEND
-# ============================================================
 
 def expand_path(p):
     return Path(os.path.expandvars(os.path.expanduser(str(p)))).resolve()
 
+
 def load_config():
     if CONFIG_FILE.exists():
-        try: return json.loads(CONFIG_FILE.read_text())
-        except Exception: return {}
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except Exception:
+            return {}
     return {}
+
 
 def save_config(cfg):
     CONFIG_DIR.mkdir(exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2))
+
 
 def ensure_defaults():
     cfg = load_config()
@@ -984,760 +77,484 @@ def ensure_defaults():
         if k not in cfg:
             cfg[k] = v
             changed = True
-    if changed: save_config(cfg)
+    if changed:
+        save_config(cfg)
     return cfg
+
 
 def file_hash(path):
     import hashlib
-    try: return hashlib.sha256(open(path, "rb").read(65536)).hexdigest()
-    except Exception: return ""
+    try:
+        return hashlib.sha256(open(path, "rb").read(65536)).hexdigest()
+    except Exception:
+        return ""
+
 
 def read_file_text(path):
-    try: return Path(path).read_text()
-    except Exception: return ""
+    try:
+        return Path(path).read_text()
+    except Exception:
+        return ""
+
 
 def write_file_text(path, text):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text)
 
-def format_size(bytesize):
-    if bytesize < 1024: return f"{bytesize} B"
-    elif bytesize < 1048576: return f"{bytesize/1024:.1f} KB"
-    else: return f"{bytesize/1048576:.1f} MB"
 
-# ---- Skill Diff ----
-def get_skill_diffs(master_root, target_roots):
-    import difflib
-    master = expand_path(master_root)
-    if not master.exists(): return []
-    master_skills = {s["name"]: expand_path(s["path"]) for s in skills_in(master)}
-    result = []
-    for target_str in target_roots:
-        target = expand_path(target_str)
-        target_skills = {s["name"]: expand_path(s["path"]) for s in skills_in(target)}
-        for name, tpath in target_skills.items():
-            t_md = tpath / "SKILL.md"
-            mpath = master_skills.get(name)
-            if not mpath: continue
-            m_md = mpath / "SKILL.md"
-            if not t_md.exists() or not m_md.exists(): continue
-            try:
-                t_mtime = os.path.getmtime(t_md)
-                m_mtime = os.path.getmtime(m_md)
-                newer = "target" if t_mtime > m_mtime else ("master" if m_mtime > t_mtime else "same")
-                diff_lines = []
-                if newer == "target":
-                    t_text = t_md.read_text()
-                    m_text = m_md.read_text()
-                    if t_text != m_text:
-                        diff_lines = list(difflib.unified_diff(
-                            m_text.splitlines(), t_text.splitlines(),
-                            fromfile=f"master/{name}/SKILL.md",
-                            tofile=f"target/{name}/SKILL.md",
-                            lineterm='', n=3
-                        ))
-                result.append({
-                    "name": name,
-                    "source_root": str(target),
-                    "source_path": str(tpath),
-                    "master_path": str(mpath),
-                    "newer": newer,
-                    "diff_lines": diff_lines[:80],
-                    "has_diff": len(diff_lines) > 0
-                })
-            except Exception:
-                continue
-    result.sort(key=lambda x: (0 if x["newer"] == "target" else 1, x["name"]))
-    return result
+def format_size(n):
+    if n < 1024:
+        return f"{n} B"
+    elif n < 1048576:
+        return f"{n / 1024:.1f} KB"
+    else:
+        return f"{n / 1048576:.1f} MB"
 
-def sync_one_skill(source_path, dest_path):
-    src = expand_path(source_path)
-    dst = expand_path(dest_path)
-    if not src.exists(): return False, f"Source not found: {src}"
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    if dst.exists():
-        backup = dst.parent / f"{dst.name}.backup-{stamp}"
-        shutil.move(str(dst), str(backup))
-    shutil.copytree(str(src), str(dst), symlinks=True)
-    return True, f"Copied {src} -> {dst}"
 
-# ---- CD Data Management ----
-def get_cd_data_info():
-    instances = find_claude_instances()
-    result = {"instances": []}
-    for inst in instances:
-        base = Path(inst["path"])
-        size_total = 0
-        databases = []
-        # IndexedDB (conversations/projects/memory)
-        indexeddb = base / "IndexedDB" / "https_claude.ai_0.indexeddb.leveldb"
-        if indexeddb.exists():
-            sz = sum(f.stat().st_size for f in indexeddb.glob("**/*") if f.is_file())
-            size_total += sz
-            databases.append({"name": "IndexedDB (разговоры/проекты/память)", "path": str(indexeddb), "size": format_size(sz), "key": "IndexedDB"})
-        # Local Storage
-        ls = base / "Local Storage" / "leveldb"
-        if ls.exists():
-            sz = sum(f.stat().st_size for f in ls.glob("**/*") if f.is_file())
-            size_total += sz
-            databases.append({"name": "Local Storage (настройки)", "path": str(ls), "size": format_size(sz), "key": "LocalStorage"})
-        # Session Storage
-        ss = base / "Session Storage" / "leveldb"
-        if ss.exists():
-            sz = sum(f.stat().st_size for f in ss.glob("**/*") if f.is_file())
-            size_total += sz
-            databases.append({"name": "Session Storage", "path": str(ss), "size": format_size(sz), "key": "SessionStorage"})
-        result["instances"].append({
-            "name": inst["name"],
-            "path": inst["path"],
-            "size_total": format_size(size_total),
-            "databases": databases
-        })
-    return result
-
-def copy_cd_data(from_name, to_name, db_keys):
-    from_path = CLAUDE_DESKTOP_DIR / from_name
-    to_path = CLAUDE_DESKTOP_DIR / to_name
-    if not from_path.exists(): return False, f"Source {from_name} not found"
-    if not to_path.exists(): return False, f"Target {to_name} not found"
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    db_map = {
-        "IndexedDB": ("IndexedDB", "https_claude.ai_0.indexeddb.leveldb"),
-        "LocalStorage": ("Local Storage", "leveldb"),
-        "SessionStorage": ("Session Storage", "leveldb"),
-    }
-    copied = []
-    for key in db_keys:
-        if key not in db_map: continue
-        subdir, name = db_map[key]
-        src = from_path / subdir / name
-        if not src.exists(): continue
-        dst = to_path / subdir
-        dst_db = dst / name
-        if dst_db.exists():
-            backup = dst / f"{name}.bak-{stamp}"
-            shutil.move(str(dst_db), str(backup))
-        dst.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(str(src), str(dst_db))
-        copied.append(key)
-    return True, f"Copied {', '.join(copied)} from {from_name} to {to_name}"
-
-# ---- Auto-backup ----
 def do_auto_backup(cfg):
     if not cfg.get("auto_backup", True):
         return
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup = {"created_at": stamp, "files": {}}
     paths = {
-        "claude_desktop": list(CLAUDE_DESKTOP_DIR.glob("Claude*/claude_desktop_config.json")),
         "claude_code": [CLAUDE_CODE_SETTINGS] if CLAUDE_CODE_SETTINGS.exists() else [],
         "codex_config": [CODEX_CONFIG] if CODEX_CONFIG.exists() else [],
         "codex_auth": [CODEX_AUTH] if CODEX_AUTH.exists() else [],
     }
-    for category, files in paths.items():
+    for cat, files in paths.items():
         for f in files:
             try:
-                backup["files"][f"{category}:{f.name}"] = {"path": str(f), "content": f.read_text()}
+                backup["files"][f"{cat}:{f.name}"] = {"path": str(f), "content": f.read_text()}
             except Exception:
                 pass
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    backup_file = BACKUP_DIR / f"auto-{stamp}.json"
-    backup_file.write_text(json.dumps(backup, ensure_ascii=False, indent=2))
+    (BACKUP_DIR / f"auto-{stamp}.json").write_text(json.dumps(backup, ensure_ascii=False, indent=2))
 
-# ---- Claude Desktop instances ----
-def find_claude_instances():
-    if not CLAUDE_DESKTOP_DIR.exists(): return []
-    instances = []
-    for p in sorted(CLAUDE_DESKTOP_DIR.glob("Claude*")):
-        if not p.is_dir(): continue
-        config_file = p / "claude_desktop_config.json"
-        instances.append({"name": p.name, "path": str(p), "config_path": str(config_file) if config_file.exists() else None, "profiles": []})
-    return instances
 
-def get_cd_profiles_data(cfg):
-    instances = find_claude_instances()
-    saved = cfg.get("claude_desktop_profiles", {})
-    for inst in instances:
-        inst_profiles = saved.get(inst["name"], {})
-        profile_list = []
-        current_hash = file_hash(inst["config_path"]) if inst["config_path"] and os.path.exists(inst["config_path"]) else None
-        for pname, pdata in inst_profiles.items():
-            profile_list.append({"name": pname, "active": current_hash and pdata.get("hash") == current_hash, "hash": pdata.get("hash", "")})
-        inst["profiles"] = profile_list
-    return {"instances": instances}
+def _decode_jwt_payload(token):
+    import base64
+    parts = token.split(".")
+    if len(parts) < 2:
+        return {}
+    payload = parts[1]
+    pad = 4 - len(payload) % 4
+    if pad != 4:
+        payload += "=" * pad
+    return json.loads(base64.urlsafe_b64decode(payload))
 
-# ---- Claude Code presets ----
-def get_current_cc_preset_name(cfg):
-    if not CLAUDE_CODE_SETTINGS.exists(): return None
-    ch = file_hash(CLAUDE_CODE_SETTINGS)
-    for name, pdata in cfg.get("claude_code_presets", {}).items():
-        if pdata.get("hash") == ch: return name
-    return None
 
-def get_cc_presets_data(cfg):
-    presets = cfg.get("claude_code_presets", {})
-    current_name = get_current_cc_preset_name(cfg)
-    current_hash = file_hash(CLAUDE_CODE_SETTINGS) if CLAUDE_CODE_SETTINGS.exists() else None
-    result = {"presets": [], "current": current_name}
-    for name in sorted(presets.keys()):
-        pdata = presets[name]
-        active = bool(current_hash and pdata.get("hash") == current_hash)
-        model = endpoint = ""
-        env_count = 0
-        if "settings" in pdata and isinstance(pdata["settings"], dict):
-            st = pdata["settings"]
-            model = st.get("model", "")
-            env = st.get("env", {})
-            endpoint = env.get("ANTHROPIC_BASE_URL", "")
-            env_count = len(env)
-        result["presets"].append({"name": name, "active": active, "model": model, "endpoint": endpoint, "env_count": env_count})
+def _detect_provider_by_url(url):
+    u = url.lower()
+    if "anthropic" in u or "z.ai" in u or "bigmodel" in u:
+        return "anthropic"
+    if "openai" in u:
+        return "openai"
+    if "gemini" in u or "generativelanguage" in u:
+        return "gemini"
+    if "mistral" in u:
+        return "mistral"
+    if "ollama" in u or "localhost:11434" in u:
+        return "ollama"
+    if "deepseek" in u:
+        return "deepseek"
+    if "openrouter" in u:
+        return "openrouter"
+    if "xai" in u or "grok" in u:
+        return "xai"
+    if "groq" in u:
+        return "groq"
+    return "openai-compat"
+
+
+def _provider_color(provider):
+    colors = {
+        "anthropic": "#d97757", "openai": "#10a37f", "gemini": "#4285f4",
+        "mistral": "#ff7000", "ollama": "#000000", "deepseek": "#4d6bfe",
+        "openrouter": "#6c63ff", "xai": "#1d1d1f", "groq": "#f55036",
+        "openai-compat": "#6b7280",
+    }
+    return colors.get(provider, "#6b7280")
+
+
+# ============================================================
+# ACCOUNT MANAGEMENT
+# ============================================================
+
+def _get_account_provider_display(account):
+    provider = account.get("provider", "openai")
+    base_url = account.get("base_url", "")
+    if base_url:
+        detected = _detect_provider_by_url(base_url)
+        if detected != "openai-compat":
+            return detected, _provider_color(detected)
+    return provider, _provider_color(provider)
+
+
+def _detect_account_limits(account):
+    limits = {"has_limits": False, "usage": 0, "limit": 0, "resets_at": "", "plan": ""}
+    provider = account.get("provider", "")
+    base_url = account.get("base_url", "")
+    if "openai" == provider and "openrouter" not in (base_url or "").lower():
+        limits["has_limits"] = True
+    elif "anthropic" == provider:
+        limits["has_limits"] = True
+    return limits
+
+
+def _get_active_accounts_for_programs(cfg):
+    result = {}
+    for prog in PROGRAMS:
+        pid = prog["id"]
+        active = _detect_active_account(cfg, pid)
+        result[pid] = active
     return result
 
-# ---- Codex profiles ----
-def get_current_cx_profile_name(cfg):
-    ch = file_hash(CODEX_CONFIG) if CODEX_CONFIG.exists() else None
-    ah = file_hash(CODEX_AUTH) if CODEX_AUTH.exists() else None
-    for name, pdata in cfg.get("codex_profiles", {}).items():
-        if pdata.get("config_hash") == ch and pdata.get("auth_hash") == ah: return name
-    return None
 
-def _decode_cx_plan(auth_raw):
-    if not auth_raw: return {}
-    try:
-        import base64
-        ad = json.loads(auth_raw)
-        id_token = ad.get("tokens", {}).get("id_token", "")
-        if not id_token: return {}
-        parts = id_token.split(".")
-        if len(parts) < 2: return {}
-        payload = parts[1]
-        pad = 4 - len(payload) % 4
-        if pad != 4: payload += "=" * pad
-        claims = json.loads(base64.urlsafe_b64decode(payload))
-        auth_info = claims.get("https://api.openai.com/auth", claims.get("https://api.openai.com/auth", {}))
-        # openai claims may be nested differently
-        for key in claims:
-            if "auth" in key.lower() and isinstance(claims[key], dict):
-                auth_info = claims[key]
-                break
-        plan = auth_info.get("chatgpt_plan_type", "")
-        sub_until = auth_info.get("chatgpt_subscription_active_until", "")
-        sub_start = auth_info.get("chatgpt_subscription_active_start", "")
-        user_id = auth_info.get("chatgpt_user_id", "")
-        account_id = auth_info.get("chatgpt_account_id", "")
-        email = claims.get("email", "")
-        name = claims.get("name", "")
-        return {
-            "plan": plan,
-            "subscription_until": sub_until[:10] if sub_until else "",
-            "subscription_start": sub_start[:10] if sub_start else "",
-            "user_id": user_id,
-            "account_id": account_id,
-            "email": email,
-            "name": name,
-        }
-    except Exception:
-        return {}
+def _detect_active_account(cfg, program_id):
+    accounts = cfg.get("accounts", [])
+    if not accounts:
+        return None
 
-def get_cx_profiles_data(cfg):
-    profiles = cfg.get("codex_profiles", {})
-    current_name = get_current_cx_profile_name(cfg)
-    ch, ah = (file_hash(CODEX_CONFIG) if CODEX_CONFIG.exists() else None), (file_hash(CODEX_AUTH) if CODEX_AUTH.exists() else None)
-    result = {"profiles": [], "current": current_name}
-    for name in sorted(profiles.keys()):
-        pdata = profiles[name]
-        active = bool(ch and ah and pdata.get("config_hash") == ch and pdata.get("auth_hash") == ah)
-        plan = _decode_cx_plan(pdata.get("auth", ""))
-        result["profiles"].append({
-            "name": name, "active": active,
-            "email": pdata.get("email", ""), "endpoint": pdata.get("endpoint", ""),
-            "model": pdata.get("model", ""),
-            "plan": plan.get("plan", ""),
-            "subscription_until": plan.get("subscription_until", ""),
-            "name_claim": plan.get("name", ""),
-        })
-    return result
-
-# ---- Skills ----
-def has_skill(root):
-    try: return (root / "SKILL.md").is_file()
-    except (PermissionError, OSError): return False
-
-def skills_in(root):
-    if not root.exists() or not root.is_dir(): return []
-    try: children = sorted(root.iterdir(), key=lambda p: p.name.lower())
-    except (PermissionError, OSError): return []
-    out = []
-    for child in children:
+    if program_id == "claude-code":
+        if not CLAUDE_CODE_SETTINGS.exists():
+            return None
         try:
-            if child.is_dir() and has_skill(child):
-                out.append({"name": child.name, "path": str(child)})
-        except (PermissionError, OSError): continue
-    return out
-
-def label_for(p):
-    s = str(p)
-    if s.endswith("/.claude/skills"): return "Claude Code"
-    if s.endswith("/.codex/skills"): return "Codex"
-    if s.endswith("/.agents/skills"): return "Agents shared"
-    if "/Library/Application Support/Claude" in s and "/skills-plugin/" in s: return "Claude Desktop session"
-    if s.endswith("/.opencode/skills"): return "OpenCode"
-    if s.endswith("/.gemini/skills"): return "Gemini"
-    return p.name or s
-
-def is_claude_desktop_skills(path_str):
-    return "/Library/Application Support/Claude" in path_str and "/skills-plugin/" in path_str
-
-def claude_desktop_skills_roots():
-    base = HOME / "Library" / "Application Support"; roots = []
-    for claude in base.glob("Claude*"):
-        try: roots += list(claude.glob("local-agent-mode-sessions/skills-plugin/*/*/skills"))
-        except (PermissionError, OSError): continue
-    return roots
-
-def scan_skills_roots(cfg):
-    custom = [expand_path(x) for x in cfg.get("custom_roots", [])]
-    targets_set = set(cfg.get("skills_targets", []))
-    candidates = [*SKILL_ROOTS_DEFAULT, *claude_desktop_skills_roots(), *custom]
-    seen, roots = set(), []
-    for p in candidates:
-        try: rp = p.resolve()
-        except Exception: rp = p
-        if str(rp) in seen: continue
-        seen.add(str(rp))
-        try: exists = rp.exists()
-        except (PermissionError, OSError): exists = False
-        count = len(skills_in(rp)) if exists else 0
-        if exists or count > 0 or str(rp) in custom:
-            roots.append({"path": str(rp), "label": label_for(rp), "exists": exists, "skill_count": count, "isTarget": str(rp) in targets_set})
-    roots.sort(key=lambda r: (not r["exists"], r["label"], r["path"]))
-    return roots
-
-def do_sync(source, targets, skill_names, overwrite=False, dry_run=False, use_symlink=False):
-    lines = []; ok = True
-    src = expand_path(source)
-    if not src.exists(): return False, f"Источник не найден: {src}"
-    all_skills = {s["name"]: Path(s["path"]) for s in skills_in(src)}
-    names = skill_names or list(all_skills)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    for target in targets:
-        t = expand_path(target)
-        if dry_run: lines.append(f"[dry] mkdir -p {t}")
-        else: t.mkdir(parents=True, exist_ok=True)
-        for name in names:
-            source_skill = all_skills.get(name)
-            if not source_skill: lines.append(f"[skip] skill не найден: {name}"); continue
-            dest = t / name; is_cd = is_claude_desktop_skills(str(t))
-            if dest.exists() or dest.is_symlink():
-                if dest.is_symlink():
-                    if not dry_run: dest.unlink()
-                    lines.append(f"[remove-symlink] {dest}")
-                elif overwrite:
-                    backup = t / f"{name}.backup-{stamp}"
-                    if dry_run: lines.append(f"[dry] mv {dest} {backup}")
-                    else: shutil.move(str(dest), str(backup))
-                    lines.append(f"[backup] {dest} -> {backup}")
-                else: lines.append(f"[conflict] существует: {dest}"); ok = False; continue
-            do_sym = use_symlink and not is_cd
-            if do_sym:
-                if dry_run: lines.append(f"[dry] ln -s {source_skill} {dest}")
-                else:
-                    try:
-                        os.symlink(str(source_skill), str(dest))
-                        lines.append(f"[link] {dest} -> {source_skill}")
-                    except Exception as e: lines.append(f"[error] symlink {dest}: {e}"); ok = False
-            else:
-                if dry_run: lines.append(f"[dry] cp -r {source_skill} {dest}")
-                else:
-                    try:
-                        if dest.exists(): shutil.rmtree(dest)
-                        shutil.copytree(str(source_skill), str(dest), symlinks=True)
-                        lines.append(f"[copy] {dest} ({name})")
-                    except Exception as e: lines.append(f"[error] copy {dest}: {e}"); ok = False
-    return ok, "\n".join(lines) if lines else "Ничего не сделано."
-
-# ---- Scenes ----
-def get_scenes_data(cfg):
-    scenes = cfg.get("scenes", {})
-    cc_current = get_current_cc_preset_name(cfg)
-    cx_current = get_current_cx_profile_name(cfg)
-    cd_instances = find_claude_instances()
-    cd_current = {}
-    for inst in cd_instances:
-        inst_profiles = cfg.get("claude_desktop_profiles", {}).get(inst["name"], {})
-        ch = file_hash(inst["config_path"]) if inst["config_path"] and os.path.exists(inst["config_path"]) else None
-        for pname, pdata in inst_profiles.items():
-            if ch and pdata.get("hash") == ch:
-                cd_current[inst["name"]] = pname
-    result = {"scenes": [], "current": {"cc_preset": cc_current, "cx_profile": cx_current, "cd_profiles": cd_current}}
-    for name, sdata in sorted(scenes.items()):
-        result["scenes"].append({"name": name, **sdata})
-    return result
-
-# ---- Backups ----
-def list_backups():
-    if not BACKUP_DIR.exists(): return []
-    backups = []
-    for f in sorted(BACKUP_DIR.glob("*.json"), reverse=True):
-        try:
-            data = json.loads(f.read_text())
-            size = f.stat().st_size
-            backups.append({
-                "name": f.stem, "date": data.get("created_at", ""),
-                "size": f"{size/1024:.1f} KB" if size < 1048576 else f"{size/1048576:.1f} MB",
-                "file_count": len(data.get("files", {}))
-            })
-        except Exception: continue
-    return backups
-
-def restore_backup(name):
-    backup_file = BACKUP_DIR / f"{name}.json"
-    if not backup_file.exists(): return False, "Бэкап не найден"
-    data = json.loads(backup_file.read_text())
-    restored = []
-    for key, finfo in data.get("files", {}).items():
-        try:
-            write_file_text(finfo["path"], finfo["content"])
-            restored.append(key)
-        except Exception as e: restored.append(f"{key}: ERROR {e}")
-    return True, "\n".join(restored)
-
-# ---- MCP Helpers ----
-CODEX_MCP_INI = CODEX_CONFIG
-
-def _mcp_source_label(key, tool_label=None):
-    parts = key.split("|", 1)
-    if tool_label:
-        return tool_label
-    return parts[0]
-
-def _read_cdx_mcp_servers():
-    """Read MCP servers from Codex config.toml (mcp_servers section)."""
-    if not CODEX_CONFIG.exists():
-        return {}
-    raw = CODEX_CONFIG.read_text()
-    try:
-        import tomllib
-        data = tomllib.loads(raw)
-    except Exception:
-        return {}
-    servers = {}
-    sec = data.get("mcp_servers", {})
-    for name, val in sec.items():
-        if isinstance(val, dict):
-            servers[name] = {
-                "command": val.get("command", ""),
-                "args": val.get("args", []),
-                "type": "http" if "url" in val else "stdio",
-                "url": val.get("url", ""),
-                "enabled": val.get("enabled", True),
-                "headers": val.get("headers", {}),
-            }
-    return servers
-
-def _write_cdx_mcp_servers(servers):
-    """Write MCP servers back into Codex config.toml."""
-    if not CODEX_CONFIG.exists():
-        return False, "Codex config not found"
-    raw = CODEX_CONFIG.read_text()
-    lines = raw.split("\n")
-    new_lines = []
-    in_servers = False
-    server_keys = set(servers.keys())
-    wrote = False
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-        # Detect start of mcp_servers section
-        if stripped.startswith("[mcp_servers."):
-            in_servers = True
-            key = stripped[len("[mcp_servers."):].rstrip("]")
-            # Skip this server section entirely; we'll rewrite all
-            while i < len(lines) and not (lines[i].strip().startswith("[") and lines[i].strip() != stripped and not lines[i].strip().startswith("[mcp_servers.")):
-                i += 1
-            i -= 1  # will be incremented
-        elif in_servers and stripped.startswith("[") and not stripped.startswith("[mcp_servers."):
-            in_servers = False
-            if not wrote:
-                # Write all servers before leaving section
-                for srv_name, srv in sorted(servers.items()):
-                    new_lines.append(f"\n[mcp_servers.{srv_name}]")
-                    if srv.get("type") == "http":
-                        new_lines.append(f'url = "{srv["url"]}"')
-                    else:
-                        new_lines.append(f'command = "{srv["command"]}"')
-                        if srv.get("args"):
-                            if len(srv["args"]) == 1:
-                                new_lines.append(f'args = ["{srv["args"][0]}"]')
-                            else:
-                                new_lines.append(f"args = [")
-                                for a in srv["args"]:
-                                    new_lines.append(f'  "{a}",')
-                                new_lines.append(f"]")
-                    if "enabled" in srv and not srv["enabled"]:
-                        new_lines.append("enabled = false")
-                    if srv.get("headers"):
-                        new_lines.append("[mcp_servers." + srv_name + ".headers]")
-                        for k, v in srv.get("headers", {}).items():
-                            new_lines.append(f'{k} = "{v}"')
-                wrote = True
-        if not in_servers or i >= len(lines):
-            new_lines.append(line)
-        elif in_servers and i >= len(lines):
-            pass
-        i += 1
-    if not wrote:
-        new_lines.append("\n")
-        for srv_name, srv in sorted(servers.items()):
-            new_lines.append(f"\n[mcp_servers.{srv_name}]")
-            if srv.get("type") == "http":
-                new_lines.append(f'url = "{srv["url"]}"')
-            else:
-                new_lines.append(f'command = "{srv["command"]}"')
-                if srv.get("args"):
-                    if len(srv["args"]) == 1:
-                        new_lines.append(f'args = ["{srv["args"][0]}"]')
-                    else:
-                        new_lines.append(f"args = [")
-                        for a in srv["args"]:
-                            new_lines.append(f'  "{a}",')
-                        new_lines.append(f"]")
-            if "enabled" in srv and not srv["enabled"]:
-                new_lines.append("enabled = false")
-    CODEX_CONFIG.write_text("\n".join(new_lines))
-    return True, "OK"
-
-def mcp_list_servers(cfg):
-    servers = []
-    tools = []
-    tool_keys = set()
-    def add_source(label, key, icon="🖥"):
-        if key not in tool_keys:
-            tools.append({"key": key, "label": f"{icon} {label}"})
-            tool_keys.add(key)
-
-    # Claude Desktop instances
-    for inst in get_cd_profiles_data(cfg)["instances"]:
-        name = inst["name"]
-        config_path = CLAUDE_DESKTOP_DIR / name / "claude_desktop_config.json"
-        add_source(f"Claude Desktop — {name}", f"cd|{name}", "💬")
-        if config_path.exists():
-            try:
-                d = json.loads(config_path.read_text())
-                mcp = d.get("mcpServers", {})
-                for srv_name, srv in mcp.items():
-                    servers.append({
-                        "name": srv_name,
-                        "source": "Claude Desktop",
-                        "sourceIcon": "💬",
-                        "instance": name,
-                        "key": f"cd|{name}",
-                        "type": "http" if "url" in srv else "stdio",
-                        "command": srv.get("command", ""),
-                        "args": srv.get("args", []),
-                        "url": srv.get("url", ""),
-                        "enabled": True,
-                    })
-            except Exception:
-                pass
-
-    # Claude Code
-    add_source("Claude Code", "cc", "⌨️")
-    if CLAUDE_CODE_SETTINGS.exists():
-        try:
-            d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
-            mcp = d.get("mcpServers", {})
-            for srv_name, srv in mcp.items():
-                servers.append({
-                    "name": srv_name,
-                    "source": "Claude Code",
-                    "sourceIcon": "⌨️",
-                    "instance": "",
-                    "key": "cc",
-                    "type": srv.get("type", "stdio"),
-                    "command": srv.get("command", ""),
-                    "args": srv.get("args", []),
-                    "url": srv.get("url", ""),
-                    "enabled": True,
-                    "headers": srv.get("headers", {}),
-                })
+            settings = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+            env = settings.get("env", {})
+            base_url = env.get("ANTHROPIC_BASE_URL", env.get("ANTHROPIC_AUTH_TOKEN", ""))
+            api_key = env.get("ANTHROPIC_API_KEY", env.get("ANTHROPIC_AUTH_TOKEN", ""))
+            model = settings.get("model", "")
+            for acc in accounts:
+                acc_url = acc.get("base_url", "")
+                acc_key = acc.get("api_key", "")
+                if acc_url and base_url and acc_url in base_url:
+                    return acc["id"]
+                if acc_key and api_key and acc_key[:20] == api_key[:20]:
+                    return acc["id"]
+                if acc.get("model") and model and acc["model"] == model:
+                    return acc["id"]
         except Exception:
             pass
 
-    # Codex
-    add_source("Codex", "cx", "🤖")
-    cdx = _read_cdx_mcp_servers()
-    for srv_name, srv in cdx.items():
-        servers.append({
-            "name": srv_name,
-            "source": "Codex",
-            "sourceIcon": "🤖",
-            "instance": "",
-            "key": "cx",
-            "type": srv.get("type", "stdio"),
-            "command": srv.get("command", ""),
-            "args": srv.get("args", []),
-            "url": srv.get("url", ""),
-            "enabled": srv.get("enabled", True),
-        })
+    elif program_id == "codex":
+        if not CODEX_CONFIG.exists():
+            return None
+        try:
+            config_text = CODEX_CONFIG.read_text()
+            model = ""
+            provider_id = ""
+            for line in config_text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("model ") and "=" in stripped:
+                    model = stripped.split("=", 1)[1].strip().strip('" ')
+                if stripped.startswith("model_provider ") and "=" in stripped:
+                    provider_id = stripped.split("=", 1)[1].strip().strip('" ')
+            mp_section = None
+            in_mp = False
+            for line in config_text.splitlines():
+                if line.strip().startswith("[model_providers.") and "]" in line:
+                    mp_section = line.strip().split(".")[1].split("]")[0]
+                    in_mp = True
+                    continue
+                if line.strip().startswith("["):
+                    in_mp = False
+                if in_mp and mp_section == provider_id:
+                    if "base_url" in stripped:
+                        base_url = stripped.split("=", 1)[1].strip().strip('" ')
+                        for acc in accounts:
+                            if acc.get("base_url") == base_url:
+                                return acc["id"]
+            for acc in accounts:
+                if acc.get("model") == model and not provider_id:
+                    return acc["id"]
+                if acc.get("codex_profile") == provider_id:
+                    return acc["id"]
+        except Exception:
+            pass
 
-    return {"servers": servers, "tools": tools}
+    elif program_id == "claude-desktop":
+        instances = _find_claude_instances()
+        if instances:
+            for acc in accounts:
+                if acc.get("claude_desktop_instance"):
+                    return acc["id"]
 
-def mcp_add_server(tool_key, name, srv_type, command, args, url):
-    if tool_key.startswith("cd|"):
-        inst = tool_key.split("|", 1)[1]
-        config_path = CLAUDE_DESKTOP_DIR / inst / "claude_desktop_config.json"
-        if not config_path.exists():
-            return False, f"Config not found for {inst}"
-        d = json.loads(config_path.read_text())
-        if "mcpServers" not in d:
-            d["mcpServers"] = {}
-        if srv_type == "http":
-            d["mcpServers"][name] = {"url": url, "type": "http"}
-        else:
-            d["mcpServers"][name] = {"command": command, "args": args}
-        config_path.write_text(json.dumps(d, indent=2, ensure_ascii=False))
-        return True, "OK"
-    elif tool_key == "cc":
-        if not CLAUDE_CODE_SETTINGS.exists():
-            return False, "Claude Code settings not found"
-        d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
-        if "mcpServers" not in d:
-            d["mcpServers"] = {}
-        if srv_type == "http":
-            d["mcpServers"][name] = {"url": url, "type": "http"}
-        else:
-            d["mcpServers"][name] = {"command": command, "args": args}
-        CLAUDE_CODE_SETTINGS.write_text(json.dumps(d, indent=2, ensure_ascii=False))
-        return True, "OK"
-    elif tool_key == "cx":
-        servers = _read_cdx_mcp_servers()
-        if srv_type == "http":
-            servers[name] = {"command": "", "args": [], "type": "http", "url": url, "enabled": True}
-        else:
-            servers[name] = {"command": command, "args": args, "type": "stdio", "url": "", "enabled": True}
-        ok, msg = _write_cdx_mcp_servers(servers)
-        return ok, msg
-    return False, "Unknown tool"
+    elif program_id == "opencode":
+        if OPENCODE_CONFIG.exists():
+            try:
+                oc = json.loads(OPENCODE_CONFIG.read_text())
+                prov = oc.get("provider", {})
+                for prov_name, prov_data in prov.items():
+                    if isinstance(prov_data, dict):
+                        opts = prov_data.get("options", {})
+                        key = opts.get("apiKey", "")
+                        base_url = opts.get("baseUrl", "")
+                        for acc in accounts:
+                            if key and acc.get("api_key") and acc["api_key"][:20] == key[:20]:
+                                return acc["id"]
+                            if base_url and acc.get("base_url") and acc["base_url"] in base_url:
+                                return acc["id"]
+            except Exception:
+                pass
 
-def mcp_delete_server(name, source, instance):
-    if source == "Claude Desktop":
-        config_path = CLAUDE_DESKTOP_DIR / instance / "claude_desktop_config.json"
-        if not config_path.exists():
-            return False, "Config not found"
-        d = json.loads(config_path.read_text())
-        d.get("mcpServers", {}).pop(name, None)
-        config_path.write_text(json.dumps(d, indent=2, ensure_ascii=False))
-        return True, "OK"
-    elif source == "Claude Code":
-        if not CLAUDE_CODE_SETTINGS.exists():
-            return False, "Settings not found"
-        d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
-        d.get("mcpServers", {}).pop(name, None)
-        CLAUDE_CODE_SETTINGS.write_text(json.dumps(d, indent=2, ensure_ascii=False))
-        return True, "OK"
-    elif source == "Codex":
-        servers = _read_cdx_mcp_servers()
-        servers.pop(name, None)
-        ok, msg = _write_cdx_mcp_servers(servers)
-        return ok, msg
-    return False, "Unknown source"
+    return accounts[0]["id"] if accounts else None
 
-def mcp_toggle_server(name, source, instance):
-    if source == "Codex":
-        servers = _read_cdx_mcp_servers()
-        if name in servers:
-            servers[name]["enabled"] = not servers[name].get("enabled", True)
-            ok, msg = _write_cdx_mcp_servers(servers)
-            return ok, msg
-        return False, "Not found"
-    return False, "Toggle only supported for Codex"
 
-# ---- Plugins Helpers ----
-def plugins_cc_list():
-    if not CLAUDE_CODE_SETTINGS.exists():
-        return {"plugins": [], "marketplaces": []}
-    d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
-    plugins = []
-    eps = d.get("enabledPlugins", {})
-    for name, enabled in eps.items():
-        plugins.append({"name": name, "enabled": enabled, "source": "claude_code"})
-    marketplaces = []
-    ekm = d.get("extraKnownMarketplaces", {})
-    for name, val in ekm.items():
-        src = val.get("source", {})
-        if isinstance(src, dict):
-            marketplaces.append({"name": name, "source": src.get("path", str(src))})
-        else:
-            marketplaces.append({"name": name, "source": str(src)})
-    return {"plugins": plugins, "marketplaces": marketplaces}
+def _find_claude_instances():
+    if not CLAUDE_DESKTOP_DIR.exists():
+        return []
+    instances = []
+    for p in sorted(CLAUDE_DESKTOP_DIR.glob("Claude*")):
+        if not p.is_dir():
+            continue
+        config_file = p / "claude_desktop_config.json"
+        instances.append({"name": p.name, "path": str(p), "config_path": str(config_file) if config_file.exists() else None})
+    return instances
 
-def plugins_cc_toggle(name):
-    if not CLAUDE_CODE_SETTINGS.exists():
-        return False, "Settings not found"
-    d = json.loads(CLAUDE_CODE_SETTINGS.read_text())
-    eps = d.setdefault("enabledPlugins", {})
-    if name in eps:
-        eps[name] = not eps[name]
-    else:
-        eps[name] = True
-    CLAUDE_CODE_SETTINGS.write_text(json.dumps(d, indent=2, ensure_ascii=False))
-    return True, "OK"
 
-def plugins_cx_list():
-    if not CODEX_CONFIG.exists():
-        return {"plugins": []}
-    raw = CODEX_CONFIG.read_text()
+def _apply_account_to_program(cfg, account_id, program_id):
+    accounts = cfg.get("accounts", [])
+    account = next((a for a in accounts if a["id"] == account_id), None)
+    if not account:
+        return False, f"Account {account_id} not found"
+
+    do_auto_backup(cfg)
+    provider = account.get("provider", "openai")
+    base_url = account.get("base_url", "")
+    api_key = account.get("api_key", "")
+    model = account.get("model", "")
+
+    if program_id == "claude-code":
+        settings = {}
+        if CLAUDE_CODE_SETTINGS.exists():
+            try:
+                settings = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+            except Exception:
+                pass
+        env = settings.setdefault("env", {})
+        if base_url:
+            env["ANTHROPIC_BASE_URL"] = base_url
+            env["ANTHROPIC_AUTH_TOKEN"] = api_key
+        elif api_key:
+            env["ANTHROPIC_API_KEY"] = api_key
+        if model:
+            settings["model"] = model
+        if account.get("claude_model_overrides"):
+            mo = account["claude_model_overrides"]
+            if mo.get("sonnet"):
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = mo["sonnet"]
+            if mo.get("opus"):
+                env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = mo["opus"]
+            if mo.get("haiku"):
+                env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = mo["haiku"]
+        write_file_text(str(CLAUDE_CODE_SETTINGS), json.dumps(settings, ensure_ascii=False, indent=2))
+        return True, f"Applied to Claude Code"
+
+    elif program_id == "codex":
+        if not CODEX_CONFIG.exists():
+            return False, "codex config.toml not found"
+        config_text = CODEX_CONFIG.read_text()
+        lines = config_text.split("\n")
+        new_lines = []
+        has_mp_section = False
+        mp_name = None
+        in_model_providers = False
+        current_mp = None
+
+        if account.get("codex_profile"):
+            mp_name = account["codex_profile"]
+
+        if account.get("model"):
+            found_model = False
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith("model ") and "=" in stripped and not found_model:
+                    new_lines.append(f'model = "{account["model"]}"')
+                    found_model = True
+                    continue
+                new_lines.append(line)
+            if not found_model:
+                new_lines.append(f'model = "{account["model"]}"')
+
+        if base_url and account.get("codex_provider"):
+            mp_name = account["codex_provider"]
+            lines = new_lines
+            new_lines = []
+            found_provider = False
+            has_mp = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("[model_providers."):
+                    has_mp = True
+                if stripped == f'[model_providers.{mp_name}]':
+                    found_provider = True
+                new_lines.append(line)
+            if not found_provider:
+                if has_mp:
+                    new_lines.append("")
+                new_lines.append(f'\n[model_providers.{mp_name}]')
+                new_lines.append(f'name = "{account.get("provider_name", mp_name)}"')
+                new_lines.append(f'base_url = "{base_url}"')
+                env_key = account.get("codex_env_key", f'{mp_name.upper()}_API_KEY')
+                new_lines.append(f'env_key = "{env_key}"')
+            new_lines = new_lines
+            lines = new_lines
+            new_lines = []
+            found_mp_line = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("model_provider ") and "=" in stripped and not found_mp_line:
+                    new_lines.append(f'model_provider = "{mp_name}"')
+                    found_mp_line = True
+                    continue
+                new_lines.append(line)
+            if not found_mp_line:
+                new_lines.append(f'model_provider = "{mp_name}"')
+
+        write_file_text(str(CODEX_CONFIG), "\n".join(new_lines))
+        return True, f"Applied to Codex"
+
+    elif program_id == "opencode":
+        if not OPENCODE_CONFIG.exists():
+            return False, "OpenCode config not found"
+        try:
+            oc = json.loads(OPENCODE_CONFIG.read_text())
+        except Exception:
+            oc = {}
+        prov = oc.setdefault("provider", {})
+        if base_url and "z.ai" in base_url.lower():
+            zai = prov.setdefault("zai-coding-plan", {})
+            opts = zai.setdefault("options", {})
+            if api_key:
+                opts["apiKey"] = api_key
+            if base_url:
+                opts["baseUrl"] = base_url
+        return True, "Applied to OpenCode"
+
+    return False, f"Program {program_id} not yet supported"
+
+
+# ============================================================
+# MCP HELPERS
+# ============================================================
+
+def _read_cdx_mcp_servers(config_path):
+    servers = []
+    p = Path(config_path)
+    if not p.exists():
+        return []
     try:
         import tomllib
-        data = tomllib.loads(raw)
+        data = tomllib.loads(p.read_text())
+        return [(name, srv) for name, srv in data.get("mcp_servers", {}).items()]
     except Exception:
-        return {"plugins": []}
-    plugins = []
-    sec = data.get("plugins", {})
-    for name, val in sec.items():
-        if isinstance(val, dict):
-            plugins.append({"name": name, "enabled": val.get("enabled", True), "source": "codex"})
-    return {"plugins": plugins}
+        pass
+    return []
 
-def plugins_cx_toggle(name):
-    # Read full config and toggle plugin
-    if not CODEX_CONFIG.exists():
-        return False, "Config not found"
-    raw = CODEX_CONFIG.read_text()
+
+def _write_cdx_mcp_servers(config_path, servers):
     import tomllib
-    data = tomllib.loads(raw)
-    plugins = data.get("plugins", {})
-    if name not in plugins:
-        return False, "Plugin not found"
-    current = plugins[name].get("enabled", True)
-    # Toggle via raw text manipulation
-    target = f"[plugins.{name}]"
-    lines = raw.split("\n")
-    new_lines = []
-    in_plugin = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped == target:
-            in_plugin = True
-            new_lines.append(line)
-        elif in_plugin and stripped.startswith("["):
-            # Write the toggled enabled line before leaving
-            new_lines.append(f"enabled = {'false' if current else 'true'}")
-            new_lines.append(line)
-            in_plugin = False
-        elif in_plugin and stripped.startswith("enabled"):
-            continue  # skip old enabled line
-        else:
-            if in_plugin:
-                new_lines.append(line)
-            else:
-                new_lines.append(line)
-    if in_plugin:
-        new_lines.append(f"enabled = {'false' if current else 'true'}")
-    CODEX_CONFIG.write_text("\n".join(new_lines))
-    return True, "OK"
+    p = Path(config_path)
+    data = {}
+    if p.exists():
+        try:
+            data = tomllib.loads(p.read_text())
+        except Exception:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data["mcp_servers"] = {name: srv for name, srv in servers}
+    write_file_text(str(p), "" if not data else "")
+    if not data:
+        return
+    lines = []
+    for k, v in data.items():
+        if isinstance(v, dict):
+            lines.append(f"[{k}]")
+            for sk, sv in v.items():
+                if isinstance(sv, list):
+                    lines.append(f'{sk} = {json.dumps(sv)}')
+                elif isinstance(sv, bool):
+                    lines.append(f'{sk} = {"true" if sv else "false"}')
+                elif isinstance(sv, (int, float)):
+                    lines.append(f'{sk} = {sv}')
+                elif isinstance(sv, str):
+                    lines.append(f'{sk} = "{sv}"')
+                elif isinstance(sv, dict):
+                    lines.append(f'\n[{k}.{sk}]')
+                    for ssk, ssv in sv.items():
+                        if isinstance(ssv, list):
+                            lines.append(f'{ssk} = {json.dumps(ssv)}')
+                        elif isinstance(ssv, bool):
+                            lines.append(f'{ssk} = {"true" if ssv else "false"}')
+                        elif isinstance(ssv, str):
+                            lines.append(f'{ssk} = "{ssv}"')
+                        else:
+                            lines.append(f'{ssk} = {ssv}')
+            lines.append("")
+    write_file_text(str(p), "\n".join(lines))
+
+
+def _read_cline_mcp(path):
+    if not Path(path).exists():
+        return []
+    try:
+        d = json.loads(Path(path).read_text())
+        return list(d.get("mcpServers", {}).items())
+    except Exception:
+        return []
+
+
+# ============================================================
+# SKILLS HELPERS
+# ============================================================
+
+def skills_in(root):
+    root = expand_path(root)
+    if not root.exists():
+        return []
+    result = []
+    for d in sorted(root.iterdir()):
+        if not d.is_dir():
+            continue
+        md = d / "SKILL.md"
+        result.append({"name": d.name, "path": str(d), "has_skill_md": md.exists()})
+    return result
+
+
+def scan_skills_roots(cfg):
+    roots = list(SKILL_ROOTS_DEFAULT) + [expand_path(p) for p in cfg.get("custom_skill_roots", [])]
+    return [{"path": str(r), "exists": r.exists(), "label": r.name, "skills": skills_in(r)} for r in roots]
+
+
+def get_skill_diffs(master_root, target_roots):
+    import difflib
+    master = expand_path(master_root)
+    if not master.exists():
+        return []
+    master_skills = {s["name"]: expand_path(s["path"]) for s in skills_in(master)}
+    result = []
+    for target_str in target_roots:
+        target = expand_path(target_str)
+        target_skills = {s["name"]: expand_path(s["path"]) for s in skills_in(target)}
+        for name, tpath in target_skills.items():
+            mpath = master_skills.get(name)
+            if not mpath:
+                continue
+            t_md = tpath / "SKILL.md"
+            m_md = mpath / "SKILL.md"
+            if not t_md.exists() or not m_md.exists():
+                continue
+            try:
+                diff_lines = list(difflib.unified_diff(
+                    m_md.read_text().splitlines(), t_md.read_text().splitlines(),
+                    fromfile=f"master/{name}/SKILL.md", tofile=f"target/{name}/SKILL.md",
+                    lineterm="", n=3))
+                result.append({"name": name, "has_diff": len(diff_lines) > 0, "diff_preview": "\n".join(diff_lines[:20])})
+            except Exception:
+                continue
+    return result
+
 
 # ============================================================
 # HTTP HANDLER
@@ -1765,473 +582,954 @@ class Handler(BaseHTTPRequestHandler):
 
     def _read_body(self):
         n = int(self.headers.get("Content-Length", "0") or "0")
-        if n == 0: return {}
+        if n == 0:
+            return {}
         return json.loads(self.rfile.read(n) or b"{}")
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path == "/": self._html(); return
+        if u.path == "/":
+            self._html()
+            return
         cfg = ensure_defaults()
 
-        if u.path == "/api/cd-profiles": self._json(get_cd_profiles_data(cfg)); return
-        if u.path == "/api/cc-presets": self._json(get_cc_presets_data(cfg)); return
-        if u.path == "/api/cx-profiles": self._json(get_cx_profiles_data(cfg)); return
-        if u.path == "/api/cx-endpoint-status": self._json({"current": cfg.get("codex_endpoint", "")}); return
-        if u.path == "/api/sk-scan": self._json({"roots": scan_skills_roots(cfg)}); return
-        if u.path == "/api/scenes": self._json(get_scenes_data(cfg)); return
-        if u.path == "/api/backups": self._json({"backups": list_backups()}); return
-        if u.path == "/api/get-settings": self._json(cfg); return
+        if u.path == "/api/accounts":
+            accounts = cfg.get("accounts", [])
+            active_map = _get_active_accounts_for_programs(cfg)
+            enriched = []
+            for acc in accounts:
+                prov_id, prov_color = _get_account_provider_display(acc)
+                limits = _detect_account_limits(acc)
+                enriched.append({**acc, "_provider_color": prov_color, "_provider_display": prov_id, "_limits": limits})
+            self._json({"accounts": enriched, "active_map": active_map, "programs": PROGRAMS})
+            return
 
-        if u.path == "/api/sk-skills":
+        if u.path == "/api/programs":
+            active_map = _get_active_accounts_for_programs(cfg)
+            accounts = cfg.get("accounts", [])
+            result = []
+            for prog in PROGRAMS:
+                active_id = active_map.get(prog["id"])
+                active_name = ""
+                if active_id:
+                    acc = next((a for a in accounts if a["id"] == active_id), None)
+                    if acc:
+                        active_name = acc.get("name", active_id)
+                result.append({**prog, "active_account_id": active_id, "active_account_name": active_name})
+            self._json({"programs": result})
+            return
+
+        if u.path == "/api/mcp-list":
+            servers = []
+            for prog in PROGRAMS:
+                pid = prog["id"]
+                if pid in ("claude-code", "codex"):
+                    cp = prog["config_path"]
+                    if cp:
+                        for name, srv in _read_cdx_mcp_servers(cp):
+                            servers.append({"name": name, "tool": pid, "enabled": not srv.get("disabled", False), "command": srv.get("command", ""), "args": srv.get("args", []), "url": srv.get("url", "")})
+                elif pid == "cline":
+                    for name, srv in _read_cline_mcp(prog["config_path"]):
+                        servers.append({"name": name, "tool": pid, "enabled": True, "command": srv.get("command", ""), "args": srv.get("args", []), "url": srv.get("url", "")})
+            self._json({"servers": servers})
+            return
+
+        if u.path == "/api/skills":
+            self._json({"roots": scan_skills_roots(cfg)})
+            return
+
+        if u.path == "/api/skills-diff":
             qs = parse_qs(u.query)
-            self._json({"skills": skills_in(expand_path(qs.get("root", [""])[0]))}); return
+            master = qs.get("master", [""])[0]
+            targets = qs.get("targets", [])
+            if master and targets:
+                self._json({"diffs": get_skill_diffs(master, targets)})
+            else:
+                self._json({"diffs": []})
+            return
 
-        if u.path == "/api/cc-preset-env":
-            qs = parse_qs(u.query); name = qs.get("name", [""])[0]
-            pdata = cfg.get("claude_code_presets", {}).get(name, {})
-            env = {}
-            if isinstance(pdata.get("settings"), dict):
-                env = pdata["settings"].get("env", {})
-            self._json({"env": env, "name": name}); return
+        if u.path == "/api/get-settings":
+            self._json(cfg)
+            return
 
-        if u.path == "/api/cd-data-info":
-            self._json(get_cd_data_info()); return
+        if u.path == "/api/backups":
+            backups = []
+            if BACKUP_DIR.exists():
+                for f in sorted(BACKUP_DIR.iterdir(), reverse=True)[:20]:
+                    if f.suffix == ".json":
+                        backups.append({"name": f.stem, "size": format_size(f.stat().st_size), "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
+            self._json({"backups": backups})
+            return
 
-        if u.path in ("/api/cd-config-path",): self._json({"path": str(CLAUDE_DESKTOP_DIR)}); return
-        if u.path in ("/api/cc-config-path",): self._json({"path": str(CLAUDE_CODE_SETTINGS)}); return
-        if u.path in ("/api/cx-config-path",): self._json({"path": str(CODEX_CONFIG)}); return
-
-        # MCP & Plugins GET endpoints
-        if u.path == "/api/mcp-list": self._json(mcp_list_servers(cfg)); return
-        if u.path == "/api/plugins-cc": self._json(plugins_cc_list()); return
-        if u.path == "/api/plugins-cx": self._json(plugins_cx_list()); return
+        if u.path == "/api/shutdown":
+            self._json({"message": "shutting down"})
+            threading.Timer(0.1, lambda: os._exit(0)).start()
+            return
 
         self.send_error(404)
 
     def do_POST(self):
-        u = urlparse(self.path); body = self._read_body(); cfg = ensure_defaults()
+        u = urlparse(self.path)
+        body = self._read_body()
+        cfg = ensure_defaults()
 
-        # CD profiles
-        if u.path == "/api/cd-save-instance":
-            inst_name = body.get("instance", "").strip(); name = body.get("name", "").strip()
-            if not inst_name or not name: return self._error("instance and name required")
-            instances = find_claude_instances()
-            target = next((i for i in instances if i["name"] == inst_name), None)
-            if not target or not target["config_path"] or not os.path.exists(target["config_path"]):
-                return self._error(f"Instance {inst_name} config not found")
-            do_auto_backup(cfg)
-            profiles = cfg.setdefault("claude_desktop_profiles", {})
-            inst_profiles = profiles.setdefault(inst_name, {})
-            inst_profiles[name] = {"hash": file_hash(target["config_path"]), "content": read_file_text(target["config_path"])}
-            save_config(cfg); self._json({"message": f"Сохранено: {inst_name}/{name}"}); return
+        # ---- Accounts ----
+        if u.path == "/api/accounts-save":
+            accounts = body.get("accounts", [])
+            cfg["accounts"] = accounts
+            save_config(cfg)
+            self._json({"message": f"Saved {len(accounts)} accounts"})
+            return
 
-        if u.path == "/api/cd-use":
-            inst = body.get("instance", "").strip(); profile = body.get("profile", "").strip()
-            if not inst or not profile: return self._error("instance and profile required")
-            pdata = cfg.get("claude_desktop_profiles", {}).get(inst, {}).get(profile)
-            if not pdata: return self._error(f"Profile {profile} not found for {inst}")
-            do_auto_backup(cfg)
-            write_file_text(str(CLAUDE_DESKTOP_DIR / inst / "claude_desktop_config.json"), pdata["content"])
-            self._json({"message": f"Активирован: {inst}/{profile}"}); return
-
-        if u.path == "/api/cd-delete":
-            inst = body.get("instance", "").strip(); profile = body.get("profile", "").strip()
-            dp = cfg.get("claude_desktop_profiles", {}).get(inst, {})
-            if profile in dp: del dp[profile]
-            save_config(cfg); self._json({"message": f"Удалён: {inst}/{profile}"}); return
-
-        # CC presets
-        if u.path == "/api/cc-save":
+        if u.path == "/api/account-create":
             name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            if not CLAUDE_CODE_SETTINGS.exists(): return self._error("settings.json не найден")
-            content = read_file_text(CLAUDE_CODE_SETTINGS)
-            try: settings_json = json.loads(content)
-            except Exception: settings_json = content
-            cfg.setdefault("claude_code_presets", {})[name] = {"hash": file_hash(CLAUDE_CODE_SETTINGS), "settings": settings_json, "raw": content}
-            save_config(cfg); self._json({"message": f"Пресет '{name}' сохранён"}); return
+            if not name:
+                return self._error("name required")
+            import uuid
+            acc = {
+                "id": str(uuid.uuid4())[:8],
+                "name": name,
+                "provider": body.get("provider", "anthropic"),
+                "api_key": body.get("api_key", ""),
+                "base_url": body.get("base_url", ""),
+                "model": body.get("model", ""),
+                "email": body.get("email", ""),
+            }
+            for key in ("claude_model_overrides", "codex_profile", "codex_provider", "codex_env_key", "provider_name"):
+                if body.get(key):
+                    acc[key] = body[key]
+            accounts = cfg.setdefault("accounts", [])
+            accounts.append(acc)
+            save_config(cfg)
+            self._json({"message": f"Created account: {name}", "account": acc})
+            return
 
-        if u.path == "/api/cc-use":
-            name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            pdata = cfg.get("claude_code_presets", {}).get(name)
-            if not pdata: return self._error(f"Пресет '{name}' не найден")
-            do_auto_backup(cfg)
-            raw = pdata.get("raw", "")
-            if not raw:
-                if isinstance(pdata.get("settings"), dict): raw = json.dumps(pdata["settings"], ensure_ascii=False, indent=2)
-                else: raw = str(pdata.get("settings", ""))
-            # Inject proxy env vars
-            proxy = cfg.get("proxy", {})
-            if proxy.get("http_proxy") or proxy.get("https_proxy"):
+        if u.path == "/api/account-delete":
+            acc_id = body.get("id", "")
+            accounts = cfg.get("accounts", [])
+            cfg["accounts"] = [a for a in accounts if a["id"] != acc_id]
+            save_config(cfg)
+            self._json({"message": "Account deleted"})
+            return
+
+        # ---- Apply account to programs ----
+        if u.path == "/api/apply-account":
+            acc_id = body.get("account_id", "")
+            prog_ids = body.get("programs", [])
+            if not acc_id:
+                return self._error("account_id required")
+            results = []
+            for pid in prog_ids:
+                ok, msg = _apply_account_to_program(cfg, acc_id, pid)
+                results.append({"program": pid, "ok": ok, "message": msg})
+            self._json({"results": results})
+            return
+
+        # ---- Import from current configs ----
+        if u.path == "/api/import-current":
+            imported = []
+            accounts = cfg.setdefault("accounts", [])
+
+            if CLAUDE_CODE_SETTINGS.exists():
                 try:
-                    settings = json.loads(raw)
-                    env = settings.setdefault("env", {})
-                    if proxy.get("http_proxy"): env["HTTP_PROXY"] = proxy["http_proxy"]
-                    if proxy.get("https_proxy"): env["HTTPS_PROXY"] = proxy["https_proxy"]
-                    if proxy.get("no_proxy"): env["NO_PROXY"] = proxy["no_proxy"]
-                    raw = json.dumps(settings, ensure_ascii=False, indent=2)
-                except Exception: pass
-            write_file_text(str(CLAUDE_CODE_SETTINGS), raw)
-            self._json({"message": f"Активирован пресет '{name}'"}); return
-
-        if u.path == "/api/cc-delete":
-            name = body.get("name", "").strip()
-            cfg.get("claude_code_presets", {}).pop(name, None)
-            save_config(cfg); self._json({"message": f"Пресет '{name}' удалён"}); return
-
-        # CC env vars
-        if u.path == "/api/cc-preset-env":
-            name = body.get("name", "").strip(); new_env = body.get("env", {})
-            if not name: return self._error("name required")
-            presets = cfg.get("claude_code_presets", {})
-            pdata = presets.get(name)
-            if pdata is None: return self._error(f"Пресет '{name}' не найден")
-            if not isinstance(pdata.get("settings"), dict):
-                pdata["settings"] = {}
-            pdata["settings"]["env"] = new_env
-            pdata["raw"] = json.dumps(pdata["settings"], ensure_ascii=False, indent=2)
-            save_config(cfg); self._json({"message": f"Env vars обновлены для '{name}'"}); return
-
-        # CX profiles
-        if u.path == "/api/cx-save":
-            name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            if not CODEX_CONFIG.exists(): return self._error("config.toml не найден")
-            config_text = read_file_text(CODEX_CONFIG); auth_text = read_file_text(CODEX_AUTH)
-            ch = file_hash(CODEX_CONFIG); ah = file_hash(CODEX_AUTH)
-            email = ""; model = ""
-            for line in config_text.splitlines():
-                if line.startswith("model"):
-                    model = line.split("=")[-1].strip().strip('" ')
-            try:
-                import base64
-                auth_json = json.loads(auth_text) if auth_text else {}
-                id_token = auth_json.get("tokens", {}).get("id_token", "")
-                if id_token:
-                    parts = id_token.split(".")
-                    if len(parts) > 1:
-                        payload = parts[1]
-                        pad = 4 - len(payload) % 4
-                        if pad != 4: payload += "=" * pad
-                        claims = json.loads(base64.urlsafe_b64decode(payload))
-                        email = claims.get("email", "")
-            except Exception: pass
-            cfg.setdefault("codex_profiles", {})[name] = {"config_hash": ch, "auth_hash": ah, "config": config_text, "auth": auth_text, "email": email, "model": model, "endpoint": cfg.get("codex_endpoint", "")}
-            save_config(cfg); self._json({"message": f"Профиль '{name}' сохранён"}); return
-
-        if u.path == "/api/cx-use":
-            name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            pdata = cfg.get("codex_profiles", {}).get(name)
-            if not pdata: return self._error(f"Профиль '{name}' не найден")
-            do_auto_backup(cfg)
-            if pdata.get("config"): write_file_text(str(CODEX_CONFIG), pdata["config"])
-            if pdata.get("auth"): write_file_text(str(CODEX_AUTH), pdata["auth"])
-            if pdata.get("endpoint"): cfg["codex_endpoint"] = pdata["endpoint"]
-            # Inject proxy env vars into config.toml
-            proxy = cfg.get("proxy", {})
-            if proxy.get("http_proxy") or proxy.get("https_proxy"):
-                import tomllib
-                raw = read_file_text(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
-                if raw:
-                    try:
-                        lines = raw.split("\n")
-                        new_lines = []
-                        wrote_proxy = False
-                        has_proxy_section = False
-                        for line in lines:
-                            stripped = line.strip()
-                            if stripped == "[proxy]":
-                                has_proxy_section = True
-                            if stripped.startswith("[") and not wrote_proxy and not has_proxy_section:
-                                # Inject proxy section before other sections
-                                new_lines.append("\n[proxy]")
-                                if proxy.get("http_proxy"): new_lines.append(f'http = "{proxy["http_proxy"]}"')
-                                if proxy.get("https_proxy"): new_lines.append(f'https = "{proxy["https_proxy"]}"')
-                                if proxy.get("no_proxy"): new_lines.append(f'no_proxy = "{proxy["no_proxy"]}"')
-                                wrote_proxy = True
-                            new_lines.append(line)
-                        if not wrote_proxy and not has_proxy_section:
-                            new_lines.append("\n[proxy]")
-                            if proxy.get("http_proxy"): new_lines.append(f'http = "{proxy["http_proxy"]}"')
-                            if proxy.get("https_proxy"): new_lines.append(f'https = "{proxy["https_proxy"]}"')
-                            if proxy.get("no_proxy"): new_lines.append(f'no_proxy = "{proxy["no_proxy"]}"')
-                        CODEX_CONFIG.write_text("\n".join(new_lines))
-                    except Exception: pass
-            save_config(cfg); self._json({"message": f"Активирован профиль '{name}'"}); return
-
-        if u.path == "/api/cx-delete":
-            name = body.get("name", "").strip()
-            cfg.get("codex_profiles", {}).pop(name, None)
-            save_config(cfg); self._json({"message": f"Профиль '{name}' удалён"}); return
-
-        # CX rename
-        if u.path == "/api/cx-rename":
-            name = body.get("name", "").strip(); new_name = body.get("new_name", "").strip()
-            if not name or not new_name: return self._error("name and new_name required")
-            profiles = cfg.get("codex_profiles", {})
-            if name not in profiles: return self._error(f"Профиль '{name}' не найден")
-            if new_name in profiles: return self._error(f"Профиль '{new_name}' уже существует")
-            profiles[new_name] = profiles.pop(name)
-            save_config(cfg); self._json({"message": f"Профиль переименован в '{new_name}'"}); return
-
-        # CX import from auth.json
-        if u.path == "/api/cx-import-auth":
-            import glob
-            auth_dir = HOME / ".codex"
-            auth_files = sorted(glob.glob(str(auth_dir / "auth.json*")))
-            imported = 0
-            profiles = cfg.setdefault("codex_profiles", {})
-            for af in auth_files:
-                afp = Path(af)
-                try:
-                    auth_raw = afp.read_text()
-                    auth_data = json.loads(auth_raw)
-                    # derive name from filename
-                    stem = afp.stem  # auth.json or auth.json.hdfa -> auth, auth.json
-                    parts = stem.replace("auth.json", "", 1).strip(".") or "default"
-                    profile_name = f"auth-{parts}" if parts != "default" else "auth-default"
-                    if profile_name in profiles:
-                        continue
-                    email = ""
-                    id_token = auth_data.get("tokens", {}).get("id_token", "")
-                    if id_token:
-                        import base64
-                        jwt_parts = id_token.split(".")
-                        if len(jwt_parts) > 1:
-                            payload = jwt_parts[1]
-                            pad = 4 - len(payload) % 4
-                            if pad != 4: payload += "=" * pad
-                            claims = json.loads(base64.urlsafe_b64decode(payload))
-                            email = claims.get("email", "")
-                    # read current config.toml
-                    config_text = read_file_text(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
-                    ch = file_hash(CODEX_CONFIG) if CODEX_CONFIG.exists() else ""
-                    ah = file_hash(afp)
-                    model = ""
-                    if config_text:
-                        for line in config_text.splitlines():
-                            if line.startswith("model"):
-                                model = line.split("=")[-1].strip().strip('" ')
-                    profiles[profile_name] = {
-                        "config_hash": ch, "auth_hash": ah,
-                        "config": config_text, "auth": auth_raw,
-                        "email": email, "model": model,
-                        "endpoint": cfg.get("codex_endpoint", ""),
-                    }
-                    imported += 1
+                    s = json.loads(CLAUDE_CODE_SETTINGS.read_text())
+                    env = s.get("env", {})
+                    base_url = env.get("ANTHROPIC_BASE_URL", "")
+                    auth_token = env.get("ANTHROPIC_AUTH_TOKEN", "")
+                    api_key = env.get("ANTHROPIC_API_KEY", "")
+                    model = s.get("model", "")
+                    if base_url or api_key:
+                        name = "Claude Code Current"
+                        provider = "anthropic"
+                        if "z.ai" in base_url:
+                            name = "Z.AI (GLM)"
+                        elif "anthropic" not in base_url and base_url:
+                            name = f"Claude ({_detect_provider_by_url(base_url)})"
+                        existing = next((a for a in accounts if a.get("name") == name), None)
+                        if not existing:
+                            acc = {"id": base_url[-8:] if base_url else str(hash(api_key))[:8], "name": name, "provider": provider, "api_key": auth_token or api_key, "base_url": base_url, "model": model}
+                            if env.get("ANTHROPIC_DEFAULT_SONNET_MODEL"):
+                                acc["claude_model_overrides"] = {"sonnet": env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "opus": env.get("ANTHROPIC_DEFAULT_OPUS_MODEL", ""), "haiku": env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL", "")}
+                            accounts.append(acc)
+                            imported.append(name)
                 except Exception:
                     pass
+
+            if CODEX_CONFIG.exists():
+                try:
+                    ct = CODEX_CONFIG.read_text()
+                    model = ""
+                    mp_id = ""
+                    for line in ct.splitlines():
+                        s = line.strip()
+                        if s.startswith("model ") and "=" in s and not s.startswith("model_"):
+                            model = s.split("=", 1)[1].strip().strip('" ')
+                        if s.startswith("model_provider ") and "=" in s:
+                            mp_id = s.split("=", 1)[1].strip().strip('" ')
+                    name = f"Codex ({mp_id or 'openai'})"
+                    existing = next((a for a in accounts if a.get("name") == name), None)
+                    if not existing:
+                        import uuid
+                        acc = {"id": str(uuid.uuid4())[:8], "name": name, "provider": "openai", "api_key": "", "base_url": "", "model": model, "codex_profile": mp_id}
+                        if mp_id:
+                            acc["codex_provider"] = mp_id
+                        accounts.append(acc)
+                        imported.append(name)
+                except Exception:
+                    pass
+
             save_config(cfg)
-            self._json({"profiles": imported, "message": f"Импортировано {imported} профилей"}); return
+            self._json({"imported": imported, "total": len(cfg.get("accounts", []))})
+            return
 
-        # CX endpoint
-        if u.path == "/api/cx-set-endpoint":
-            url = body.get("url", "").strip()
-            if not url: return self._error("url required")
-            cfg["codex_endpoint"] = url; save_config(cfg)
-            self._json({"message": f"Endpoint: {url}"}); return
+        # ---- MCP ----
+        if u.path == "/api/mcp-add":
+            name = body.get("name", "")
+            tool = body.get("tool", "")
+            command = body.get("command", "")
+            args = body.get("args", [])
+            url = body.get("url", "")
+            if not name or not tool:
+                return self._error("name and tool required")
+            prog = next((p for p in PROGRAMS if p["id"] == tool), None)
+            if not prog:
+                return self._error(f"Unknown tool: {tool}")
+            cp = prog["config_path"]
+            if not cp:
+                return self._error(f"No config path for {tool}")
+            try:
+                if tool in ("claude-code", "codex"):
+                    servers = _read_cdx_mcp_servers(cp)
+                    srv = {}
+                    if url:
+                        srv["url"] = url
+                    else:
+                        srv["command"] = command
+                        srv["args"] = args
+                    servers.append((name, srv))
+                    _write_cdx_mcp_servers(cp, servers)
+                elif tool == "cline":
+                    if not Path(cp).exists():
+                        Path(cp).parent.mkdir(parents=True, exist_ok=True)
+                        Path(cp).write_text("{}")
+                    d = json.loads(Path(cp).read_text())
+                    mcp = d.setdefault("mcpServers", {})
+                    if url:
+                        mcp[name] = {"url": url}
+                    else:
+                        mcp[name] = {"command": command, "args": args}
+                    Path(cp).write_text(json.dumps(d, ensure_ascii=False, indent=2))
+                self._json({"ok": True, "message": f"Added {name} to {tool}"})
+            except Exception as e:
+                self._json({"ok": False, "message": str(e)})
+            return
 
-        if u.path == "/api/cx-clear-endpoint":
-            cfg["codex_endpoint"] = ""; save_config(cfg)
-            self._json({"message": "Endpoint сброшен"}); return
+        if u.path == "/api/mcp-delete":
+            name = body.get("name", "")
+            tool = body.get("tool", "")
+            prog = next((p for p in PROGRAMS if p["id"] == tool), None)
+            if prog and prog["config_path"]:
+                try:
+                    if tool in ("claude-code", "codex"):
+                        servers = [(n, s) for n, s in _read_cdx_mcp_servers(prog["config_path"]) if n != name]
+                        _write_cdx_mcp_servers(prog["config_path"], servers)
+                    elif tool == "cline":
+                        d = json.loads(Path(prog["config_path"]).read_text())
+                        d.get("mcpServers", {}).pop(name, None)
+                        Path(prog["config_path"]).write_text(json.dumps(d, ensure_ascii=False, indent=2))
+                    self._json({"ok": True})
+                except Exception as e:
+                    self._json({"ok": False, "message": str(e)})
+            return
 
-        if u.path == "/api/cx-create-wrapper":
-            endpoint = cfg.get("codex_endpoint", "")
-            wrapper_path = HOME / ".local" / "bin" / "codex-wrapper"
-            codex_bin = "/Applications/Codex.app/Contents/Resources/codex"
-            if not os.path.exists(codex_bin): codex_bin = shutil.which("codex") or ""
-            script = "#!/bin/bash\n"
-            if endpoint: script += f'export OPENAI_BASE_URL="{endpoint}"\n'
-            script += f'exec "{codex_bin}" "$@"\n' if codex_bin else 'exec codex "$@"\n'
-            write_file_text(str(wrapper_path), script); os.chmod(str(wrapper_path), 0o755)
-            msg = f"Wrapper: {wrapper_path}" + (f"\nOPENAI_BASE_URL={endpoint}" if endpoint else "")
-            self._json({"message": msg}); return
+        # ---- Skills ----
+        if u.path == "/api/skills-sync":
+            source = body.get("source", "")
+            targets = body.get("targets", [])
+            ok_msgs = []
+            for target in targets:
+                src = expand_path(source)
+                dst = expand_path(target)
+                if src.exists() and src.is_dir():
+                    try:
+                        if dst.exists():
+                            shutil.rmtree(str(dst))
+                        shutil.copytree(str(src), str(dst))
+                        ok_msgs.append(f"{src.name} -> {dst.parent.name}")
+                    except Exception as e:
+                        ok_msgs.append(f"Error: {e}")
+            self._json({"ok": True, "log": ok_msgs})
+            return
 
-        # Skills
-        if u.path == "/api/sk-add-root":
+        if u.path == "/api/skills-add-root":
             p = str(expand_path(body.get("path", "")))
-            if not p: return self._error("path required")
-            custom = cfg.setdefault("custom_roots", [])
-            if p not in custom: custom.append(p)
-            save_config(cfg)
-            self._json({"roots": scan_skills_roots(cfg), "message": f"Добавлено: {p}"}); return
+            if not p:
+                return self._error("path required")
+            custom = cfg.setdefault("custom_skill_roots", [])
+            if p not in custom:
+                custom.append(p)
+                save_config(cfg)
+            self._json({"roots": scan_skills_roots(cfg)})
+            return
 
-        if u.path == "/api/sk-sync":
-            ok, out = do_sync(body.get("source", ""), body.get("targets", []), body.get("skills", []), body.get("overwrite", False), body.get("dry_run", False), body.get("use_symlink", False))
-            self._json({"ok": ok, "log": out}); return
-
-        # Scenes
-        if u.path == "/api/scenes-save":
-            name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            cc_current = get_current_cc_preset_name(cfg)
-            cx_current = get_current_cx_profile_name(cfg)
-            cd_instances = find_claude_instances()
-            cd_profiles = {}
-            for inst in cd_instances:
-                inst_profiles = cfg.get("claude_desktop_profiles", {}).get(inst["name"], {})
-                ch = file_hash(inst["config_path"]) if inst["config_path"] and os.path.exists(inst["config_path"]) else None
-                for pname, pdata in inst_profiles.items():
-                    if ch and pdata.get("hash") == ch:
-                        cd_profiles[inst["name"]] = pname
-            cfg.setdefault("scenes", {})[name] = {"cd_profiles": cd_profiles, "cc_preset": cc_current, "cx_profile": cx_current}
-            save_config(cfg); self._json({"message": f"Сцена '{name}' сохранена"}); return
-
-        if u.path == "/api/scenes-apply":
-            name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            scene = cfg.get("scenes", {}).get(name)
-            if not scene: return self._error(f"Сцена '{name}' не найдена")
-            do_auto_backup(cfg)
-            errors = []
-            # Apply CD profiles
-            for inst_name, profile_name in scene.get("cd_profiles", {}).items():
-                pdata = cfg.get("claude_desktop_profiles", {}).get(inst_name, {}).get(profile_name)
-                if pdata:
-                    write_file_text(str(CLAUDE_DESKTOP_DIR / inst_name / "claude_desktop_config.json"), pdata["content"])
-            # Apply CC preset
-            cc_name = scene.get("cc_preset")
-            if cc_name:
-                pdata = cfg.get("claude_code_presets", {}).get(cc_name)
-                if pdata:
-                    raw = pdata.get("raw", "")
-                    if not raw and isinstance(pdata.get("settings"), dict): raw = json.dumps(pdata["settings"], ensure_ascii=False, indent=2)
-                    write_file_text(str(CLAUDE_CODE_SETTINGS), raw)
-            # Apply CX profile
-            cx_name = scene.get("cx_profile")
-            if cx_name:
-                pdata = cfg.get("codex_profiles", {}).get(cx_name)
-                if pdata:
-                    if pdata.get("config"): write_file_text(str(CODEX_CONFIG), pdata["config"])
-                    if pdata.get("auth"): write_file_text(str(CODEX_AUTH), pdata["auth"])
-            self._json({"message": f"Сцена '{name}' применена" + (f" ({len(errors)} errors)" if errors else "")}); return
-
-        if u.path == "/api/scenes-delete":
-            name = body.get("name", "").strip()
-            cfg.get("scenes", {}).pop(name, None)
-            save_config(cfg); self._json({"message": f"Сцена '{name}' удалена"}); return
-
-        # Quick launch
-        if u.path == "/api/quick-launch":
-            cc_name = get_current_cc_preset_name(cfg)
-            cx_name = get_current_cx_profile_name(cfg)
-            endpoint = cfg.get("codex_endpoint", "")
-            lines = ["#!/bin/bash", "# MultiManager Quick Launch", f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ""]
-            if cc_name:
-                lines.append(f"# Claude Code preset: {cc_name}")
-                lines.append(f"# claude code (uses ~/.claude/settings.json)")
-                lines.append("alias cc='claude code'")
-                lines.append("")
-            if cx_name:
-                lines.append(f"# Codex profile: {cx_name}")
-                if endpoint:
-                    lines.append(f'export OPENAI_BASE_URL="{endpoint}"')
-                lines.append("alias cx='codex-wrapper' 2>/dev/null || alias cx='OPENAI_BASE_URL=\"'$OPENAI_BASE_URL'\" codex'")
-                lines.append("")
-            lines.append("# Copy these aliases to ~/.zshrc or ~/.bashrc")
-            self._json({"script": "\n".join(lines)}); return
-
-        # Backups
+        # ---- Settings ----
         if u.path == "/api/backup-now":
             do_auto_backup(cfg)
-            self._json({"message": "Бэкап создан"}); return
-
-        if u.path == "/api/backup-restore":
-            name = body.get("name", "").strip()
-            if not name: return self._error("name required")
-            ok, msg = restore_backup(name)
-            self._json({"ok": ok, "message": msg}); return
-
-        if u.path == "/api/backup-delete":
-            name = body.get("name", "").strip()
-            f = BACKUP_DIR / f"{name}.json"
-            if f.exists(): f.unlink()
-            self._json({"message": f"Бэкап '{name}' удалён"}); return
+            self._json({"message": "Backup created"})
+            return
 
         if u.path == "/api/set-auto-backup":
             cfg["auto_backup"] = body.get("enabled", True)
-            save_config(cfg); self._json({"message": "OK"}); return
-
-        # Proxy
-        if u.path == "/api/set-proxy":
-            cfg["proxy"] = {
-                "http_proxy": body.get("http_proxy", ""),
-                "https_proxy": body.get("https_proxy", ""),
-                "no_proxy": body.get("no_proxy", ""),
-            }
-            save_config(cfg); self._json({"message": "Прокси сохранён"}); return
-
-        # Skill diff
-        if u.path == "/api/sk-diff":
-            master = body.get("master", ""); targets = body.get("targets", [])
-            if not master or not targets: return self._error("master and targets required")
-            self._json({"diffs": get_skill_diffs(master, targets)}); return
-
-        if u.path == "/api/sk-sync-one":
-            source = body.get("source", ""); dest = body.get("dest", "")
-            if not source or not dest: return self._error("source and dest required")
-            ok, msg = sync_one_skill(source, dest)
-            self._json({"ok": ok, "message": msg}); return
-
-        # CD data copy
-        if u.path == "/api/cd-copy-data":
-            from_name = body.get("from", ""); to_name = body.get("to", ""); databases = body.get("databases", ["IndexedDB"])
-            if not from_name or not to_name: return self._error("from and to required")
-            ok, msg = copy_cd_data(from_name, to_name, databases)
-            self._json({"ok": ok, "message": msg}); return
-
-        # MCP add
-        if u.path == "/api/mcp-add":
-            name = body.get("name", ""); tool = body.get("tool", "")
-            srv_type = body.get("type", "stdio"); command = body.get("command", "")
-            args = body.get("args", []); url = body.get("url", "")
-            if not name or not tool: return self._error("name and tool required")
-            ok, msg = mcp_add_server(tool, name, srv_type, command, args, url)
-            self._json({"ok": ok, "error": None if ok else msg}); return
-
-        # MCP delete
-        if u.path == "/api/mcp-delete":
-            name = body.get("name", ""); source = body.get("source", ""); instance = body.get("instance", "")
-            ok, msg = mcp_delete_server(name, source, instance)
-            self._json({"ok": ok, "error": None if ok else msg}); return
-
-        # MCP toggle
-        if u.path == "/api/mcp-toggle":
-            name = body.get("name", ""); source = body.get("source", ""); instance = body.get("instance", "")
-            ok, msg = mcp_toggle_server(name, source, instance)
-            self._json({"ok": ok, "error": None if ok else msg}); return
-
-        # Plugins CC toggle
-        if u.path == "/api/plugins-cc-toggle":
-            name = body.get("name", "")
-            ok, msg = plugins_cc_toggle(name)
-            self._json({"ok": ok, "error": None if ok else msg}); return
-
-        # Plugins CX toggle
-        if u.path == "/api/plugins-cx-toggle":
-            name = body.get("name", "")
-            ok, msg = plugins_cx_toggle(name)
-            self._json({"ok": ok, "error": None if ok else msg}); return
+            save_config(cfg)
+            self._json({"message": "OK"})
+            return
 
         self.send_error(404)
 
-    def log_message(self, *args): pass
+    def log_message(self, *args):
+        pass
 
+
+# ============================================================
+# HTML FRONTEND
+# ============================================================
+
+html = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MultiManager</title>
+<style>
+:root {
+  --bg: #0a0a0a; --bg-sidebar: #111111; --bg-card: #1a1a1a; --bg-hover: #222222;
+  --bg-selected: #2a2a2a; --text: #e5e5e5; --text-dim: #888888; --text-muted: #555555;
+  --accent: #3b82f6; --accent-hover: #2563eb; --border: #2a2a2a; --border-light: #333333;
+  --success: #22c55e; --warning: #f59e0b; --danger: #ef4444;
+  --radius: 8px; --radius-lg: 12px; --sidebar-w: 220px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; font-size: 13px; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+
+/* SIDEBAR */
+#sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 12px 0; }
+#sidebar .logo { padding: 8px 16px 20px; font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; color: var(--accent); }
+#sidebar .logo svg { width: 18px; height: 18px; }
+.nav-items { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius); cursor: pointer; color: var(--text-dim); transition: all 0.15s; font-size: 13px; user-select: none; }
+.nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.nav-item.active { background: var(--bg-selected); color: var(--text); }
+.nav-item.active svg { color: var(--accent); }
+.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+.nav-item.active svg { opacity: 1; }
+.nav-sep { height: 1px; background: var(--border); margin: 8px 12px; }
+
+/* MAIN CONTENT */
+#main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.page { display: none; flex: 1; overflow: auto; padding: 20px 24px; }
+.page.active { display: flex; flex-direction: column; }
+.page-title { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+
+/* PAGE 1: Accounts */
+#page-accounts { flex-direction: row; padding: 0; }
+#account-list { width: 300px; min-width: 300px; border-right: 1px solid var(--border); overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+#account-list .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#account-list .list-header h3 { font-size: 14px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.btn { padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border-light); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px; }
+.btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: rgba(239,68,68,0.1); }
+.btn-sm { padding: 4px 8px; font-size: 11px; }
+.btn-icon { padding: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+
+.account-card { padding: 12px; border-radius: var(--radius-lg); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+.account-card:hover { border-color: var(--border-light); background: var(--bg-hover); }
+.account-card.selected { border-color: var(--accent); background: rgba(59,130,246,0.08); }
+.account-card .acc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.account-card .acc-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.account-card .acc-name { font-weight: 500; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-card .acc-provider { font-size: 11px; color: var(--text-dim); margin-left: auto; flex-shrink: 0; }
+.account-card .acc-model { font-size: 11px; color: var(--text-muted); }
+.account-card .acc-usage { margin-top: 6px; }
+.usage-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.usage-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+#program-panel { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; }
+#program-panel .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+#program-panel .panel-header h2 { font-size: 18px; font-weight: 600; }
+.prog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.prog-card { padding: 14px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-card); display: flex; flex-direction: column; gap: 8px; transition: all 0.15s; cursor: pointer; }
+.prog-card:hover { border-color: var(--border-light); }
+.prog-card.checked { border-color: var(--accent); background: rgba(59,130,246,0.06); }
+.prog-card .prog-top { display: flex; align-items: center; gap: 10px; }
+.prog-card .prog-icon { width: 32px; height: 32px; border-radius: var(--radius); background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.prog-card .prog-name { font-weight: 500; font-size: 14px; }
+.prog-card .prog-active { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+.prog-card .prog-active .active-tag { color: var(--success); font-weight: 500; }
+.prog-card .prog-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+.prog-card .prog-check input { accent-color: var(--accent); }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; color: var(--text-muted); gap: 8px; }
+.empty-state svg { width: 48px; height: 48px; opacity: 0.3; }
+.empty-state p { font-size: 14px; }
+
+/* PAGE 2: Programs */
+#page-programs { padding: 20px 24px; }
+.prog-settings-layout { display: flex; gap: 20px; height: calc(100vh - 40px); }
+.prog-sidebar { width: 200px; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
+.prog-sidebar-item { padding: 10px 12px; border-radius: var(--radius); cursor: pointer; color: var(--text-dim); display: flex; align-items: center; gap: 8px; font-size: 13px; transition: all 0.15s; }
+.prog-sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
+.prog-sidebar-item.active { background: var(--bg-selected); color: var(--text); }
+.prog-detail { flex: 1; overflow-y: auto; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 20px; }
+
+/* PAGE 3: MCP */
+.mcp-table { width: 100%; border-collapse: collapse; }
+.mcp-table th { text-align: left; padding: 8px 12px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+.mcp-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.mcp-table tr:hover td { background: var(--bg-hover); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: var(--bg-hover); color: var(--text-dim); }
+.tag-enabled { background: rgba(34,197,94,0.15); color: var(--success); }
+
+/* PAGE 4: Skills */
+.skill-root { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 12px; }
+.skill-root-header { padding: 12px 16px; background: var(--bg-card); display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+.skill-root-header:hover { background: var(--bg-hover); }
+.skill-root-body { padding: 0 16px 12px; display: none; }
+.skill-root.expanded .skill-root-body { display: block; }
+.skill-item { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+.skill-item:last-child { border-bottom: none; }
+.skill-name { color: var(--text); }
+.skill-status { font-size: 11px; }
+.skill-status.has-md { color: var(--success); }
+
+/* PAGE 5: Settings */
+.setting-group { margin-bottom: 24px; }
+.setting-group h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-dim); }
+.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.setting-label { font-size: 13px; }
+.setting-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 24px; width: 420px; max-width: 90vw; }
+.modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.form-group input, .form-group select { width: 100%; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius); color: var(--text); font-size: 13px; outline: none; }
+.form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* Toast */
+#toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 10px 16px; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--border-light); font-size: 13px; animation: slideIn 0.2s ease; }
+.toast.success { border-color: var(--success); }
+.toast.error { border-color: var(--danger); }
+@keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Status dot for menu bar indication */
+.status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.status-dot.online { background: var(--success); box-shadow: 0 0 4px var(--success); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    MultiManager
+  </div>
+  <div class="nav-items">
+    <div class="nav-item active" data-page="accounts" onclick="switchPage('accounts')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Accounts
+    </div>
+    <div class="nav-item" data-page="programs" onclick="switchPage('programs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Programs
+    </div>
+    <div class="nav-item" data-page="mcp" onclick="switchPage('mcp')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4m-9.9-2.1l2.8-2.8m14.2-14.2l2.8-2.8M1 12h4m14 0h4m-2.1 9.9l-2.8-2.8M3.9 3.9L1.1 1.1"/></svg>
+      MCP
+    </div>
+    <div class="nav-item" data-page="skills" onclick="switchPage('skills')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Skills
+    </div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </div>
+  </div>
+  <div style="padding: 8px 16px; margin-top: auto; font-size: 11px; color: var(--text-muted);">
+    <span class="status-dot online"></span> Running
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- PAGE: Accounts & Programs -->
+  <div id="page-accounts" class="page active">
+    <div id="account-list">
+      <div class="list-header">
+        <h3>Accounts</h3>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="importCurrent()">Import</button>
+          <button class="btn btn-sm btn-primary" onclick="openCreateModal()">+</button>
+        </div>
+      </div>
+      <div id="account-cards"></div>
+    </div>
+    <div id="program-panel">
+      <div class="empty-state" id="no-selection">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <p>Select an account to configure programs</p>
+      </div>
+      <div id="program-content" style="display:none">
+        <div class="panel-header">
+          <h2 id="panel-title">Apply Account</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="toggleAllChecks(true)">All</button>
+            <button class="btn" onclick="toggleAllChecks(false)">None</button>
+            <button class="btn btn-primary" onclick="applySelected()">Apply</button>
+          </div>
+        </div>
+        <div class="prog-grid" id="prog-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: Programs -->
+  <div id="page-programs" class="page">
+    <div class="page-title">Program Settings</div>
+    <div class="prog-settings-layout">
+      <div class="prog-sidebar" id="prog-settings-sidebar"></div>
+      <div class="prog-detail" id="prog-detail">
+        <div class="empty-state"><p>Select a program</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: MCP -->
+  <div id="page-mcp" class="page">
+    <div class="page-title" style="display:flex;justify-content:space-between;align-items:center">
+      MCP Servers
+      <button class="btn btn-primary" onclick="openMcpAddModal()">Add Server</button>
+    </div>
+    <div id="mcp-content"></div>
+  </div>
+
+  <!-- PAGE: Skills -->
+  <div id="page-skills" class="page">
+    <div class="page-title" style="display:flex;justify-content:space-between;align-items:center">
+      Skills
+      <button class="btn" onclick="refreshSkills()">Refresh</button>
+    </div>
+    <div id="skills-content"></div>
+  </div>
+
+  <!-- PAGE: Settings -->
+  <div id="page-settings" class="page">
+    <div class="page-title">Settings</div>
+    <div id="settings-content"></div>
+  </div>
+</div>
+
+<!-- CREATE ACCOUNT MODAL -->
+<div class="modal-overlay" id="modal-create">
+  <div class="modal">
+    <h2>New Account</h2>
+    <div class="form-group"><label>Name</label><input id="acc-name" placeholder="e.g. My GLM"></div>
+    <div class="form-group"><label>Provider</label>
+      <select id="acc-provider">
+        <option value="anthropic">Anthropic / Claude</option>
+        <option value="openai">OpenAI</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="gemini">Gemini</option>
+        <option value="mistral">Mistral</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="ollama">Ollama (local)</option>
+        <option value="xai">xAI (Grok)</option>
+        <option value="groq">Groq</option>
+        <option value="openai-compat">OpenAI Compatible</option>
+      </select>
+    </div>
+    <div class="form-group"><label>API Key</label><input id="acc-apikey" type="password" placeholder="sk-..."></div>
+    <div class="form-group"><label>Base URL (optional)</label><input id="acc-baseurl" placeholder="https://api.example.com/v1"></div>
+    <div class="form-group"><label>Model (optional)</label><input id="acc-model" placeholder="e.g. gpt-5.4"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="createAccount()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- MCP ADD MODAL -->
+<div class="modal-overlay" id="modal-mcp-add">
+  <div class="modal">
+    <h2>Add MCP Server</h2>
+    <div class="form-group"><label>Name</label><input id="mcp-name" placeholder="server-name"></div>
+    <div class="form-group"><label>Program</label>
+      <select id="mcp-tool">
+        <option value="claude-code">Claude Code</option>
+        <option value="codex">Codex</option>
+        <option value="cline">Cline</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Command (stdio)</label><input id="mcp-command" placeholder="npx"></div>
+    <div class="form-group"><label>Args (comma-separated)</label><input id="mcp-args" placeholder="mcp-server,--flag"></div>
+    <div class="form-group"><label>URL (SSE, optional)</label><input id="mcp-url" placeholder="https://..."></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeMcpAddModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addMcpServer()">Add</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+let state = { accounts: [], programs: [], activeMap: {}, selectedAccountId: null };
+const PROG_ICONS = { 'claude-code': 'C', 'codex': 'X', 'claude-desktop': 'D', 'opencode': 'O', 'cline': 'L', 'roo-code': 'R' };
+
+function switchPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+  if (page === 'mcp') loadMcp();
+  if (page === 'skills') loadSkills();
+  if (page === 'settings') loadSettings();
+  if (page === 'programs') loadProgramSettings();
+}
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+async function api(path, body = null) {
+  const opts = body ? { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) } : {};
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+async function loadAccounts() {
+  const data = await api('/api/accounts');
+  state = { ...state, ...data };
+  renderAccountList();
+}
+
+function renderAccountList() {
+  const { accounts } = state;
+  const container = document.getElementById('account-cards');
+  if (!accounts.length) {
+    container.innerHTML = '<div class="empty-state"><p>No accounts yet</p></div>';
+    return;
+  }
+  const sorted = [...accounts].sort((a, b) => {
+    const aLim = a._limits?.has_limits ? 0 : 1;
+    const bLim = b._limits?.has_limits ? 0 : 1;
+    if (aLim !== bLim) return aLim - bLim;
+    return a.name.localeCompare(b.name);
+  });
+  container.innerHTML = sorted.map(acc => `
+    <div class="account-card ${state.selectedAccountId === acc.id ? 'selected' : ''}" onclick="selectAccount('${acc.id}')">
+      <div class="acc-header">
+        <span class="acc-color" style="background:${acc._provider_color}"></span>
+        <span class="acc-name">${acc.name}</span>
+        <span class="acc-provider">${acc._provider_display}</span>
+      </div>
+      <div class="acc-model">${acc.model || 'default model'}</div>
+      ${acc.email ? `<div class="acc-model">${acc.email}</div>` : ''}
+      ${acc._limits?.has_limits ? '<div class="acc-usage"><div class="usage-bar"><div class="usage-bar-fill" style="width:0%;background:var(--accent)"></div></div></div>' : ''}
+    </div>
+  `).join('');
+}
+
+function selectAccount(id) {
+  state.selectedAccountId = id;
+  renderAccountList();
+  renderProgramPanel();
+}
+
+function renderProgramPanel() {
+  const acc = state.accounts.find(a => a.id === state.selectedAccountId);
+  if (!acc) return;
+  document.getElementById('no-selection').style.display = 'none';
+  document.getElementById('program-content').style.display = 'block';
+  document.getElementById('panel-title').textContent = `Apply "${acc.name}" to:`;
+
+  const grid = document.getElementById('prog-grid');
+  grid.innerHTML = state.programs.map(prog => {
+    const activeId = state.activeMap[prog.id];
+    const isActive = activeId === acc.id;
+    return `
+      <div class="prog-card ${isActive ? 'checked' : ''}" onclick="toggleCheck(this)">
+        <div class="prog-top">
+          <div class="prog-icon">${PROG_ICONS[prog.id] || '?'}</div>
+          <div>
+            <div class="prog-name">${prog.name}</div>
+          </div>
+          <div class="prog-active">
+            ${isActive ? '<span class="active-tag">Active</span>' : (activeId ? `← ${state.accounts.find(a=>a.id===activeId)?.name || activeId}` : '')}
+          </div>
+        </div>
+        <div class="prog-check">
+          <input type="checkbox" class="prog-check-input" value="${prog.id}" ${isActive ? 'checked' : ''}>
+          <span>Select to apply</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleCheck(card) {
+  const cb = card.querySelector('.prog-check-input');
+  cb.checked = !cb.checked;
+  card.classList.toggle('checked', cb.checked);
+}
+
+function toggleAllChecks(checked) {
+  document.querySelectorAll('.prog-check-input').forEach(cb => {
+    cb.checked = checked;
+    cb.closest('.prog-card').classList.toggle('checked', checked);
+  });
+}
+
+async function applySelected() {
+  if (!state.selectedAccountId) return;
+  const programs = [...document.querySelectorAll('.prog-check-input:checked')].map(cb => cb.value);
+  if (!programs.length) { toast('No programs selected'); return; }
+  const res = await api('/api/apply-account', { account_id: state.selectedAccountId, programs });
+  const msgs = res.results?.map(r => r.ok ? `${r.program}: OK` : `${r.program}: ${r.message}`) || [];
+  toast(msgs.join('; '), msgs.every(m => m.includes('OK')) ? 'success' : 'error');
+  loadAccounts();
+}
+
+function openCreateModal() { document.getElementById('modal-create').classList.add('open'); }
+function closeCreateModal() { document.getElementById('modal-create').classList.remove('open'); }
+
+async function createAccount() {
+  const name = document.getElementById('acc-name').value.trim();
+  if (!name) { toast('Name required', 'error'); return; }
+  const acc = {
+    name,
+    provider: document.getElementById('acc-provider').value,
+    api_key: document.getElementById('acc-apikey').value,
+    base_url: document.getElementById('acc-baseurl').value,
+    model: document.getElementById('acc-model').value,
+  };
+  const res = await api('/api/account-create', acc);
+  toast(res.message, 'success');
+  closeCreateModal();
+  ['acc-name','acc-apikey','acc-baseurl','acc-model'].forEach(id => document.getElementById(id).value = '');
+  loadAccounts();
+}
+
+async function importCurrent() {
+  const res = await api('/api/import-current');
+  toast(`Imported: ${res.imported?.join(', ') || 'none'}`, res.imported?.length ? 'success' : '');
+  loadAccounts();
+}
+
+// MCP
+async function loadMcp() {
+  const data = await api('/api/mcp-list');
+  const container = document.getElementById('mcp-content');
+  if (!data.servers?.length) {
+    container.innerHTML = '<div class="empty-state"><p>No MCP servers configured</p></div>';
+    return;
+  }
+  container.innerHTML = `<table class="mcp-table"><thead><tr>
+    <th>Name</th><th>Program</th><th>Type</th><th>Command / URL</th><th></th>
+  </tr></thead><tbody>${data.servers.map(s => `
+    <tr>
+      <td><strong>${s.name}</strong></td>
+      <td><span class="tag">${s.tool}</span></td>
+      <td>${s.url ? 'SSE' : 'stdio'}</td>
+      <td style="color:var(--text-dim);font-size:11px">${s.url || (s.command + ' ' + (s.args||[]).join(' '))}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteMcp('${s.name}','${s.tool}')">Del</button></td>
+    </tr>
+  `).join('')}</tbody></table>`;
+}
+
+function openMcpAddModal() { document.getElementById('modal-mcp-add').classList.add('open'); }
+function closeMcpAddModal() { document.getElementById('modal-mcp-add').classList.remove('open'); }
+
+async function addMcpServer() {
+  const name = document.getElementById('mcp-name').value.trim();
+  if (!name) return;
+  const args = document.getElementById('mcp-args').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const res = await api('/api/mcp-add', {
+    name, tool: document.getElementById('mcp-tool').value,
+    command: document.getElementById('mcp-command').value,
+    args, url: document.getElementById('mcp-url').value,
+  });
+  toast(res.message, res.ok ? 'success' : 'error');
+  if (res.ok) { closeMcpAddModal(); loadMcp(); }
+}
+
+async function deleteMcp(name, tool) {
+  const res = await api('/api/mcp-delete', { name, tool });
+  if (res.ok) loadMcp();
+  else toast(res.message, 'error');
+}
+
+// Skills
+async function loadSkills() {
+  const data = await api('/api/skills');
+  const container = document.getElementById('skills-content');
+  container.innerHTML = data.roots.map(root => `
+    <div class="skill-root">
+      <div class="skill-root-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <span>${root.label} <span style="color:var(--text-muted);font-size:11px">(${root.skills?.length || 0})</span></span>
+        <span style="color:var(--text-muted)">${root.path}</span>
+      </div>
+      <div class="skill-root-body">
+        ${root.skills?.map(s => `
+          <div class="skill-item">
+            <span class="skill-name">${s.name}</span>
+            <span class="skill-status ${s.has_skill_md ? 'has-md' : ''}">${s.has_skill_md ? 'SKILL.md' : ''}</span>
+          </div>
+        `).join('') || '<p style="color:var(--text-muted);font-size:12px">Empty</p>'}
+      </div>
+    </div>
+  `).join('');
+}
+function refreshSkills() { loadSkills(); }
+
+// Programs Settings
+async function loadProgramSettings() {
+  const data = await api('/api/programs');
+  const sidebar = document.getElementById('prog-settings-sidebar');
+  sidebar.innerHTML = data.programs.map(p => `
+    <div class="prog-sidebar-item" onclick="showProgDetail('${p.id}')">
+      <span style="font-weight:600">${PROG_ICONS[p.id]||'?'}</span> ${p.name}
+    </div>
+  `).join('');
+}
+
+function showProgDetail(id) {
+  document.querySelectorAll('.prog-sidebar-item').forEach(i => i.classList.remove('active'));
+  event.currentTarget?.classList.add('active');
+  const prog = state.programs.find(p => p.id === id) || PROGRAMS.find(p => p.id === id);
+  const detail = document.getElementById('prog-detail');
+  if (!prog) return;
+  const active = prog.active_account_name || 'None';
+  detail.innerHTML = `
+    <h2 style="margin-bottom:12px">${prog.name}</h2>
+    <div class="setting-group">
+      <div class="setting-row"><div><div class="setting-label">Active Account</div><div class="setting-desc">${active}</div></div></div>
+      <div class="setting-row"><div><div class="setting-label">Config Path</div><div class="setting-desc">${prog.config_path || 'N/A'}</div></div></div>
+    </div>
+  `;
+}
+
+// Settings
+async function loadSettings() {
+  const cfg = await api('/api/get-settings');
+  const container = document.getElementById('settings-content');
+  container.innerHTML = `
+    <div class="setting-group">
+      <h3>General</h3>
+      <div class="setting-row">
+        <div><div class="setting-label">Auto Backup</div><div class="setting-desc">Create backups before applying changes</div></div>
+        <label style="cursor:pointer"><input type="checkbox" ${cfg.auto_backup !== false ? 'checked' : ''} onchange="api('/api/set-auto-backup',{enabled:this.checked}).then(()=>toast('Saved','success'))"></label>
+      </div>
+    </div>
+    <div class="setting-group">
+      <h3>Actions</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="api('/api/backup-now').then(()=>toast('Backup created','success'))">Create Backup</button>
+        <button class="btn btn-danger" onclick="api('/api/shutdown').then(()=>toast('Shutting down...'))">Shutdown</button>
+      </div>
+    </div>
+    <div class="setting-group">
+      <h3>Config</h3>
+      <pre style="background:var(--bg);padding:12px;border-radius:var(--radius);font-size:11px;overflow:auto;max-height:300px;color:var(--text-dim)">${JSON.stringify(cfg, null, 2)}</pre>
+    </div>
+  `;
+}
+
+// Init
+loadAccounts();
+</script>
+</body>
+</html>"""
+
+
+# ============================================================
+# MENU BAR (macOS)
+# ============================================================
+
+def setup_menubar(port):
+    try:
+        import pystray
+        from PIL import Image, ImageDraw
+
+        def create_icon():
+            size = 22
+            img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.rounded_rectangle([2, 2, size - 2, size - 2], radius=4, fill=(59, 130, 246, 255))
+            draw.rounded_rectangle([6, 6, 10, 10], radius=1, fill=(255, 255, 255, 255))
+            draw.rounded_rectangle([12, 6, 16, 10], radius=1, fill=(255, 255, 255, 255))
+            draw.rounded_rectangle([6, 12, 10, 16], radius=1, fill=(255, 255, 255, 255))
+            draw.rounded_rectangle([12, 12, 16, 16], radius=1, fill=(255, 255, 255, 255))
+            return img
+
+        def on_open(icon, item):
+            webbrowser.open(f"http://127.0.0.1:{port}")
+
+        def on_quit(icon, item):
+            icon.stop()
+            os._exit(0)
+
+        icon = pystray.Icon(
+            "MultiManager",
+            icon=create_icon(),
+            menu=pystray.Menu(
+                pystray.MenuItem("Open MultiManager", on_open),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Quit", on_quit),
+            ),
+        )
+        icon.run_detached()
+    except Exception as e:
+        print(f"[menubar] Failed to start: {e}")
+        print("[menubar] Continuing without menu bar icon")
+
+
+# ============================================================
+# SERVER
+# ============================================================
 
 def free_port():
-    s = socket.socket(); s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]; s.close(); return port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 def main():
     port = free_port()
-    url = f"http://127.0.0.1:{port}/"
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    threading.Timer(0.35, lambda: webbrowser.open(url)).start()
-    print(f"{APP_NAME} running: {url}")
-    server.serve_forever()
+    print(f"[mm] MultiManager running at http://127.0.0.1:{port}")
+    setup_menubar(port)
+    threading.Timer(0.35, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
 
 
 if __name__ == "__main__":
