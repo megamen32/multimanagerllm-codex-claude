@@ -1,1 +1,0 @@
-# MultiManager v2 — package
