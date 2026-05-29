@@ -21,6 +21,11 @@ def ensure_defaults():
     changed = False
     for k, v in DEFAULT_CONFIG.items():
         if k not in cfg: cfg[k] = v; changed = True
+    # Migration: fill missing codex_provider on Codex accounts
+    for a in cfg.get("accounts", []):
+        if a.get("name", "").startswith("Codex") and "codex_provider" not in a:
+            a["codex_provider"] = ""
+            changed = True
     if changed: save_config(cfg)
     return cfg
 

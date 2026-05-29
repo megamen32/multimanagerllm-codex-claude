@@ -210,6 +210,17 @@ def import_accounts():
     # Cline / Roo Code configs
     imported += import_from_cline_roo(cfg, accounts, existing_keys, existing_urls)
 
+    # Migration: fill missing fields on existing accounts
+    migrated = False
+    for a in accounts:
+        if a.get("name", "").startswith("Codex") and not a.get("codex_provider"):
+            a["codex_provider"] = cx.get("model_provider", "")
+            if email: a["email"] = email
+            if plan: a["plan"] = plan
+            migrated = True
+    if migrated:
+        save_config(cfg)
+
     save_config(cfg)
     return imported
 
