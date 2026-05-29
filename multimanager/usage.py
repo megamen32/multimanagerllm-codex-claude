@@ -145,6 +145,32 @@ def fetch_account_usage(account):
         except Exception as e:
             result = {"type": "openai", "error": str(e)[:80]}
 
+    # Claude Desktop OAuth — show token expiry as "usage"
+    elif account.get("claude_oauth_cred"):
+        expires_in = account.get("claude_oauth_expires_in", 0)
+        has_refresh = account.get("claude_oauth_has_refresh", False)
+        email = account.get("claude_oauth_email", "")
+        # Compute remaining percentage (token valid ~24h from issue)
+        total_secs = 86400  # typical Claude Desktop OAuth token lifetime
+        if expires_in > 0:
+            used_pct = round(max(0, min(100, (1 - expires_in / total_secs) * 100)), 1)
+        else:
+            used_pct = 100 if expires_in == 0 else None
+        result = {
+            "type": "claude-desktop",
+            "used_pct": used_pct,
+            "email": email,
+            "expires_in_seconds": expires_in,
+            "expires_in_hours": round(expires_in / 3600, 1) if expires_in > 0 else 0,
+            "has_refresh": has_refresh,
+            "windows": [{
+                "label": "token",
+                "used_pct": used_pct,
+                "remaining_pct": round(100 - used_pct, 1) if used_pct is not None else None,
+                "reset_at": None,
+            }],
+        }
+
     # Z.AI / GLM — try BigModel balance API
     elif ("z.ai" in base_url or "bigmodel" in base_url) and api_key:
         try:

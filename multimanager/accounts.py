@@ -1,9 +1,10 @@
 """Account CRUD, import from programs, detect active, apply."""
-import json, uuid, shutil, os
+import json, uuid, shutil, os, time
 from pathlib import Path
 from .settings import (
     CC_SETTINGS, CX_CONFIG, CX_AUTH, OPENCODE_CFG, CONFIG_DIR, MASTER_DIR,
-    PROGRAMS, decode_jwt, expand_path, detect_provider
+    PROGRAMS, decode_jwt, expand_path, detect_provider,
+    ANTHROPIC_CREDENTIALS_DIR, ANTHROPIC_CONFIGS_DIR, ANTHROPIC_ACTIVE_CONFIG,
 )
 from .config import ensure_defaults, save_config, do_backup
 from .toml_utils import parse_toml_simple, write_toml_simple
@@ -29,6 +30,108 @@ def _write_cx(data):
              "approval_policy", "sandbox_mode", "notify", "openai_base_url"]
     CX_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     CX_CONFIG.write_text(write_toml_simple(data, order))
+
+
+def import_from_claude_desktop(cfg, accounts, existing_keys, existing_urls):
+    """Import Claude Desktop OAuth credentials as accounts."""
+    imported = []
+    if not ANTHROPIC_CREDENTIALS_DIR.exists():
+        return imported
+    for f in sorted(ANTHROPIC_CREDENTIALS_DIR.glob("*.json")):
+        try:
+            data = json.loads(f.read_text())
+            access_token = data.get("access_token", "")
+            if not access_token:
+                continue
+            claims = decode_jwt(data.get("id_token", access_token))
+            email = claims.get("email", "")
+            exp = data.get("expires_at", 0) or claims.get("exp", 0)
+            name = f.stem
+            name_str = f"Claude Desktop ({email or name})"
+            if any(a.get("name") == name_str for a in accounts):
+                continue
+            accounts.append({
+                "id": uuid.uuid4().hex[:8], "name": name_str,
+                "provider": "anthropic", "api_key": "", "base_url": "",
+                "model": "", "claude_oauth_cred": name,
+                "claude_oauth_email": email,
+                "claude_oauth_expires_at": exp,
+                "claude_oauth_expires_in": max(0, exp - time.time()) if exp else 0,
+                "claude_oauth_has_refresh": bool(data.get("refresh_token", "")),
+            })
+            imported.append(name_str)
+        except Exception:
+            pass
+    return imported
+
+
+def import_from_cline_roo(cfg, accounts, existing_keys, existing_urls):
+    """Import Cline / Roo Code configs as accounts."""
+    imported = []
+    for prog in ("cline", "roo-code"):
+        cp = PROGRAMS[3] if prog == "cline" else PROGRAMS[4]  # index in PROGRAMS list
+        p = Path(cp["config_path"])
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text())
+        except Exception:
+            continue
+        # Extract API keys from MCP settings (apiKey in any env field)
+        seen = set()
+        api_key = ""
+        base_url = ""
+        # Check top-level mcpServers
+        mcp_servers = data.get("mcpServers", {}) if isinstance(data, dict) else {}
+        for sname, sdata in mcp_servers.items():
+            if isinstance(sdata, dict):
+                env = sdata.get("env", {}) if isinstance(sdata.get("env"), dict) else {}
+                for k, v in env.items():
+                    if v and isinstance(v, str) and len(v) > 10 and any(prefix in k.upper() for prefix in ("API_KEY", "AUTH_TOKEN")):
+                        if v[:20] not in seen:
+                            seen.add(v[:20])
+                            api_key = v
+                            break
+        # Also check top-level env
+        tenv = data.get("env", {}) if isinstance(data, dict) else {}
+        for k, v in tenv.items():
+            if v and isinstance(v, str) and len(v) > 10 and any(prefix in k.upper() for prefix in ("API_KEY", "AUTH_TOKEN")):
+                if v[:20] not in seen:
+                    seen.add(v[:20])
+                    api_key = v
+                    break
+        # Fallback: check settings sub-dir
+        settings_dir = p.parent / "settings"
+        if not api_key and settings_dir.exists():
+            for sf in sorted(settings_dir.glob("*.json")):
+                try:
+                    sd = json.loads(sf.read_text())
+                    for k in ("apiKey", "api_key"):
+                        if sd.get(k):
+                            api_key = sd[k]
+                            break
+                    for sk, sv in sd.get("env", {}).items():
+                        if sv and isinstance(sv, str) and len(sv) > 10:
+                            api_key = sv
+                            break
+                except Exception:
+                    pass
+                if api_key:
+                    break
+        if not api_key:
+            continue
+        if api_key[:20] in existing_keys:
+            continue
+        name_str = f"{cp['name']} ({api_key[:8]}...)"
+        accounts.append({
+            "id": uuid.uuid4().hex[:8], "name": name_str,
+            "provider": "openai" if api_key.startswith("sk-") else (
+                "anthropic" if api_key.startswith("sk-ant-") else "openai"
+            ),
+            "api_key": api_key, "base_url": base_url, "model": "",
+        })
+        imported.append(name_str)
+    return imported
 
 
 def import_accounts():
@@ -101,6 +204,12 @@ def import_accounts():
                 })
                 imported.append(n)
 
+    # Claude Desktop OAuth credentials
+    imported += import_from_claude_desktop(cfg, accounts, existing_keys, existing_urls)
+
+    # Cline / Roo Code configs
+    imported += import_from_cline_roo(cfg, accounts, existing_keys, existing_urls)
+
     save_config(cfg)
     return imported
 
@@ -162,6 +271,57 @@ def detect_active_accounts():
                 if acc.get("base_url") and oc_url and acc["base_url"] in oc_url: score += 2
                 if score > best_score: best_score = score; best = acc
             result["opencode"] = best["id"] if best and best_score >= 2 else None
+
+    # Claude Desktop
+    if ANTHROPIC_ACTIVE_CONFIG.exists():
+        active_name = ANTHROPIC_ACTIVE_CONFIG.read_text().strip()
+        best = None; best_score = 0
+        for acc in accounts:
+            if acc.get("claude_oauth_cred") == active_name:
+                score = 3
+            elif acc.get("claude_oauth_cred"):
+                score = 1
+            else:
+                continue
+            if score > best_score: best_score = score; best = acc
+        result["claude-desktop"] = best["id"] if best and best_score >= 2 else None
+
+    # Cline / Roo Code — check if their configs use matching keys
+    for prog_id in ("cline", "roo-code"):
+        cp = PROGRAMS[3] if prog_id == "cline" else PROGRAMS[4]
+        p = Path(cp["config_path"])
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text())
+        except Exception:
+            continue
+        # Find first key in the config
+        config_key = ""
+        mcp_servers = data.get("mcpServers", {}) if isinstance(data, dict) else {}
+        for sdata in mcp_servers.values():
+            if isinstance(sdata, dict):
+                env = sdata.get("env", {}) if isinstance(sdata.get("env"), dict) else {}
+                for v in env.values():
+                    if v and isinstance(v, str) and len(v) > 10:
+                        config_key = v
+                        break
+                if config_key:
+                    break
+        if not config_key:
+            tenv = data.get("env", {}) if isinstance(data, dict) else {}
+            for v in tenv.values():
+                if v and isinstance(v, str) and len(v) > 10:
+                    config_key = v
+                    break
+        if config_key:
+            best = None; best_score = 0
+            for acc in accounts:
+                score = 0
+                if acc.get("api_key") and config_key and acc["api_key"][:20] == config_key[:20]:
+                    score = 3
+                if score > best_score: best_score = score; best = acc
+            result[prog_id] = best["id"] if best and best_score >= 2 else None
 
     return result
 

@@ -17,6 +17,11 @@ OPENCODE_CFG = HOME / ".config" / "opencode" / "opencode.json"
 CLINE_CFG = HOME / ".cline" / "mcp_settings.json"
 ROO_CFG = HOME / ".roo" / "mcp_settings.json"
 
+ANTHROPIC_DIR = HOME / ".config" / "anthropic"
+ANTHROPIC_CREDENTIALS_DIR = ANTHROPIC_DIR / "credentials"
+ANTHROPIC_CONFIGS_DIR = ANTHROPIC_DIR / "configs"
+ANTHROPIC_ACTIVE_CONFIG = ANTHROPIC_DIR / "config"
+
 APP_NAME = "MultiManager"
 CD_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 CD_OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
