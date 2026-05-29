@@ -475,7 +475,8 @@ def scan_master_skills():
                            "size": md.stat().st_size if md.exists() else 0})
     return skills
 
-def scan_program_skills():
+def scan_all_skill_dirs():
+    dirs = {expand_path(prog["skills_dir"]) for prog in PROGRAMS if prog["skills_dir"]}
     result = {}
     for prog in PROGRAMS:
         sd = expand_path(prog["skills_dir"])
@@ -483,7 +484,11 @@ def scan_program_skills():
             result[prog["id"]] = [d.name for d in sd.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
         else:
             result[prog["id"]] = []
-    return result
+    extra = [expand_path(p) for p in ensure_defaults().get("custom_skill_roots", [])]
+    for sd in extra:
+        if sd.exists():
+            result["extra"] = [d.name for d in sd.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
+    return result, dirs
 
 def sync_skill_to_programs(skill_name, program_ids):
     src = MASTER_SKILLS / skill_name
@@ -629,9 +634,27 @@ class Handler(BaseHTTPRequestHandler):
 
         if u.path == "/api/skills":
             master = scan_master_skills()
-            prog_skills = scan_program_skills()
+            prog_skills, _ = scan_all_skill_dirs()
             self._json({"master": master, "programs": prog_skills})
             return
+        if u.path == "/api/programs":
+            active = detect_active_accounts()
+            prog_mcp = scan_program_mcp()
+            prog_skills, _ = scan_all_skill_dirs()
+            pnames = {p["id"]: p["name"] for p in PROGRAMS}
+            key_map = {a["id"]: a["name"] for a in cfg.get("accounts", [])}
+            list_data = []
+            for p in PROGRAMS:
+                pid = p["id"]
+                list_data.append({
+                    "id": pid, "name": p["name"], "letter": p["letter"],
+                    "config_path": p["config_path"],
+                    "skills_count": len(prog_skills.get(pid, [])),
+                    "mcp_count": len(prog_mcp.get(pid, {})),
+                    "active_account": key_map.get(active.get(pid), None),
+                    "type": p["type"],
+                })
+            self._json({"programs": list_data}); return
 
         if u.path == "/api/mcp":
             master = scan_master_mcp()
@@ -725,6 +748,37 @@ class Handler(BaseHTTPRequestHandler):
             dst.mkdir(parents=True, exist_ok=True)
             (dst / "SKILL.md").write_text(content)
             self._json({"ok": True}); return
+        if u.path == "/api/skills-import-from-program":
+            pid = b.get("program", "")
+            if not pid: return self._err("program required")
+            prog = next(p for p in PROGRAMS if p["id"] == pid)
+            src = expand_path(prog["skills_dir"])
+            if not src.exists(): return self._json({"imported": []})
+            MASTER_SKILLS.mkdir(parents=True, exist_ok=True)
+            names = []
+            for d in sorted(src.iterdir()):
+                if d.is_dir() and (d / "SKILL.md").exists():
+                    dst = MASTER_SKILLS / d.name
+                    if dst.exists(): continue
+                    shutil.copytree(str(d), str(dst))
+                    names.append(d.name)
+            self._json({"imported": names})
+            return
+        if u.path == "/api/skills-import-from-folder":
+            folder = b.get("folder", "").strip()
+            if not folder: return self._err("folder path required")
+            src = Path(os.path.expandvars(os.path.expanduser(folder)))
+            if not src.exists(): return self._err("folder not found")
+            MASTER_SKILLS.mkdir(parents=True, exist_ok=True)
+            names = []
+            for d in sorted(src.iterdir()):
+                if d.is_dir() and (d / "SKILL.md").exists():
+                    dst = MASTER_SKILLS / d.name
+                    if dst.exists(): continue
+                    shutil.copytree(str(d), str(dst))
+                    names.append(d.name)
+            self._json({"imported": names})
+            return
 
         # MCP
         if u.path == "/api/mcp-add":
@@ -865,6 +919,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
     <div class="ni" data-p="skills" onclick="go('skills')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>Skills</div>
     <div class="ni" data-p="mcp" onclick="go('mcp')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M1 12h4m14 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>MCP</div>
     <div class="sep"></div>
+    <div class="ni" data-p="progs" onclick="go('progs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Programs</div>
     <div class="ni" data-p="set" onclick="go('set')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</div>
   </div>
   <div style="padding:8px 16px;font-size:11px;color:var(--tx3)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 4px var(--ok)"></span> Running</div>
@@ -891,9 +946,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 
 <!-- SKILLS -->
 <div id="pg-skills" class="pg">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 12px">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 12px;flex-wrap:wrap;gap:6px">
     <div class="pt" style="padding:0">Skills</div>
-    <div style="display:flex;gap:6px"><button class="b bs bp" onclick="syncAllSkills()">Sync All to Programs</button><button class="b bs" onclick="loadSkills()">Refresh</button></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <select id="sk-import-prog" style="padding:4px 8px;background:var(--card);border:1px solid var(--brd2);border-radius:var(--r);color:var(--tx);font-size:11px;outline:none"></select>
+      <button class="b bs" onclick="importSkillsFromProgram()">Import</button>
+      <button class="b bs" onclick="importSkillsFromFolder()">From Folder</button>
+      <button class="b bs bp" onclick="syncAllSkills()">Sync All</button>
+      <button class="b bs" onclick="loadSkills()">Refresh</button>
+    </div>
   </div>
   <div style="flex:1;overflow:auto;padding:0 24px 20px"><table class="tmat" id="sk-tbl"><thead id="sk-head"></thead><tbody id="sk-body"></tbody></table></div>
 </div>
@@ -905,6 +966,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
     <div style="display:flex;gap:6px"><button class="b bs bp" onclick="syncAllMcp()">Sync All</button><button class="b bs bp" onclick="openModal('m-mcp')">+ Add</button></div>
   </div>
   <div style="flex:1;overflow:auto;padding:0 24px 20px"><table class="tmat" id="mcp-tbl"><thead id="mcp-head"></thead><tbody id="mcp-body"></tbody></table></div>
+</div>
+
+<!-- PROGRAMS -->
+<div id="pg-progs" class="pg" style="padding:20px 24px;flex-direction:column">
+  <div class="pt" style="padding:0 0 16px">Programs</div>
+  <div id="prog-cards" class="pgrid"></div>
 </div>
 
 <!-- SETTINGS -->
@@ -940,7 +1007,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 let S={accs:[],active:{},sel:null,progs:[]};
 const PI={'claude-code':'C','codex':'X','opencode':'O','cline':'L','roo-code':'R'};
 
-function go(p){document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));document.getElementById('pg-'+p).classList.add('on');document.querySelectorAll('.ni').forEach(n=>n.classList.toggle('on',n.dataset.p===p));if(p==='skills')loadSkills();if(p==='mcp')loadMcp();if(p==='set')loadSet()}
+function go(p){document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));document.getElementById('pg-'+p).classList.add('on');document.querySelectorAll('.ni').forEach(n=>n.classList.toggle('on',n.dataset.p===p));if(p==='skills')loadSkills();if(p==='mcp')loadMcp();if(p==='set')loadSet();if(p==='progs')loadProgPage()}
 function toast(m,t=''){const e=document.createElement('div');e.className='toast '+(t==='ok'?'ok':t==='er'?'er':'');e.textContent=m;document.getElementById('tc').appendChild(e);setTimeout(()=>e.remove(),4000)}
 async function api(p,b=null){const o=b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{};const r=await fetch(p,o);return r.json()}
 function openModal(id){document.getElementById(id).classList.add('open')}
@@ -973,14 +1040,25 @@ async function createAcc(){const n=document.getElementById('f-name').value.trim(
 const r=await api('/api/account-create',{name:n,provider:document.getElementById('f-prov').value,api_key:document.getElementById('f-key').value,base_url:document.getElementById('f-url').value,model:document.getElementById('f-model').value});
 if(r.ok){toast('Created: '+n,'ok');closeModal('m-create');['f-name','f-key','f-url','f-model'].forEach(i=>document.getElementById(i).value='');loadAccs()}else toast(r.error,'er')}
 
+// PROGRAMS
+async function loadProgPage(){const d=await api('/api/programs');renderProgCards(d.programs)}
+function renderProgCards(progs){const c=document.getElementById('prog-cards');
+c.innerHTML=progs.map(p=>`<div class="pc"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account?'\uD83D\uDC1A '+p.active_account:'\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count||0} skills</span><span>\uD83D\uDD17 ${p.mcp_count||0} MCP</span><span>${p.type}</span></div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')}
+
 // SKILLS
 async function loadSkills(){const d=await api('/api/skills');
 const head=document.getElementById('sk-head');const body=document.getElementById('sk-body');
 const pids=S.progs.map(p=>p.id);const pnames={};S.progs.forEach(p=>pnames[p.id]=p.name);
+// Populate import dropdown
+const sel=document.getElementById('sk-import-prog');sel.innerHTML=S.progs.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
 head.innerHTML=`<tr><th>Skill</th>${pids.map(id=>`<th style="text-align:center">${pnames[id]}</th>`).join('')}<th></th></tr>`;
 const rows=d.master.map(sk=>{const checks=pids.map(pid=>{const has=sk.name in Object.fromEntries((d.programs[pid]||[]).map(n=>[n,true]));return`<td style="text-align:center"><input type="checkbox" data-sk="${sk.name}" data-prog="${pid}" ${has?'checked':''}></td>`}).join('');
 return`<tr><td class="sn">${sk.name}${sk.in_master?'<span class="master-tag">master</span>':''}<div class="sd">${sk.has_md?'SKILL.md':'—'}</div></td>${checks}<td><button class="b bs" onclick="syncSkill('${sk.name}')">Sync</button></td></tr>`}).join('');
-if(!rows)body.innerHTML='<tr><td colspan="99" style="color:var(--tx3);padding:20px">No skills in master. Add skill folders to ~/.multimanager/master/skills/</td></tr>';else body.innerHTML=rows}
+if(!rows){const ip=S.progs.map(p=>`<div class="pc" onclick="importSkillsFromProgram('${p.id}')" style="cursor:pointer"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="sd">${p.id}</div></div></div><div style="font-size:11px;color:var(--tx3)">Click to import all skills →</div></div>`).join('');
+body.innerHTML=`<tr><td colspan="99"><div style="padding:20px;text-align:center;color:var(--tx3)">No skills in master yet.</div><div style="padding:0 20px 20px"><div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--tx2)">Import from programs:</div><div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${ip}</div><div style="margin-top:12px;display:flex;gap:8px;align-items:center"><button class="b" onclick="importSkillsFromFolder()">📁 From Folder</button></div></div></td></tr>`}
+else body.innerHTML=rows}
+async function importSkillsFromProgram(pid){if(!pid)pid=document.getElementById('sk-import-prog').value;const r=await api('/api/skills-import-from-program',{program:pid});if(r.imported?.length)toast(`Imported: ${r.imported.join(', ')}`,'ok');else toast('No new skills','');loadSkills()}
+async function importSkillsFromFolder(){const p=prompt('Enter folder path:');if(!p)return;const r=await api('/api/skills-import-from-folder',{folder:p});if(r.imported?.length)toast(`Imported: ${r.imported.join(', ')}`,'ok');else toast('No new skills or folder not found','er');loadSkills()}
 
 async function syncSkill(name){const pids=[...document.querySelectorAll(`input[data-sk="${name}"]:checked`)].map(c=>c.dataset.prog);if(!pids.length){toast('Select programs','er');return}
 const r=await api('/api/skill-sync',{skill:name,programs:pids});toast(r.message,r.ok?'ok':'er')}
