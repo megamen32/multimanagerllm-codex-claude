@@ -133,6 +133,104 @@ def detect_provider(url):
     return "openai"
 
 # ============================================================
+# USAGE / LIMIT CACHE
+# ============================================================
+_USAGE_CACHE = {}
+_USAGE_CACHE_TTL = 120
+
+def _get_codex_plan():
+    try:
+        if CX_AUTH.exists():
+            auth = json.loads(CX_AUTH.read_text())
+            tokens = auth.get("tokens", {})
+            access_token = tokens.get("access_token", "")
+            token_exp = 0
+            email = ""
+            plan = ""
+            if access_token:
+                claims = decode_jwt(access_token)
+                token_exp = claims.get("exp", 0)
+                profile = claims.get("https://api.openai.com/profile", {})
+                oa = claims.get("https://api.openai.com/auth", {})
+                email = profile.get("email", "")
+                plan = oa.get("chatgpt_plan_type", "")
+            now = time.time()
+            return {
+                "email": email,
+                "plan": plan,
+                "token_expires_in": max(0, token_exp - now) if token_exp else None,
+                "has_api_key": bool(auth.get("OPENAI_API_KEY")),
+            }
+    except: pass
+    return {}
+
+def fetch_account_usage(account):
+    key = account.get("id", "")
+    now = time.time()
+    cached = _USAGE_CACHE.get(key)
+    if cached and now - cached["ts"] < _USAGE_CACHE_TTL:
+        return cached["data"]
+
+    api_key = account.get("api_key", "")
+    base_url = account.get("base_url", "")
+    prov = account.get("provider", detect_provider(base_url))
+    result = {}
+
+    # Codex accounts — read plan info from auth.json
+    if account.get("id") in [a["id"] for a in ensure_defaults().get("accounts",[]) if not a.get("api_key")]:
+        plan = _get_codex_plan()
+        if plan:
+            result = {"type": "codex", "plan": plan.get("plan",""), "email": plan.get("email",""),
+                      "token_expires_in": plan.get("token_expires_in"), "has_api_key": plan.get("has_api_key")}
+            if plan.get("token_expires_in") is not None:
+                hours = plan["token_expires_in"] / 3600
+                if hours < 24:
+                    result["used_pct"] = round((1 - hours / 24) * 100, 1)
+                    result["remaining"] = f"{hours:.1f}h"
+
+    # OpenAI accounts with real API key (not "any-key" dummy)
+    elif prov == "openai" and api_key and api_key.startswith("sk-"):
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/dashboard/rate_limits",
+                headers={"Authorization": f"Bearer {api_key}"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = json.loads(r.read())
+                limits = data if isinstance(data, list) else data.get("data", [])
+                rem = sum(l.get("remaining", 0) for l in limits if isinstance(l, dict))
+                total = sum(l.get("max_requests", 0) for l in limits if isinstance(l, dict))
+                pct = round((total - rem) / total * 100, 1) if total > 0 else None
+                result = {"type": "openai", "remaining": rem, "total": total, "used_pct": pct}
+        except urllib.error.HTTPError as e:
+            result = {"type": "openai", "error": f"{e.code}"}
+        except Exception as e:
+            result = {"type": "openai", "error": str(e)[:80]}
+
+    # Z.AI / GLM — try BigModel balance API
+    elif ("z.ai" in base_url or "bigmodel" in base_url) and api_key:
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "https://open.bigmodel.cn/api/llm/balance",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = json.loads(r.read())
+                if data.get("success") or data.get("code") != 500:
+                    result = {"type": "zai", "data": data}
+                else:
+                    # Key doesn't work for BigModel directly (Z.AI proxy key)
+                    result = {"type": "zai", "note": "GLM quota via MCP"}
+        except Exception as e:
+            result = {"type": "zai", "note": "quota via MCP"}
+
+    _USAGE_CACHE[key] = {"ts": now, "data": result}
+    return result
+
+
+# ============================================================
 # TOML HELPERS (simple, no dependency)
 # ============================================================
 def parse_toml_simple(text):
@@ -628,7 +726,8 @@ class Handler(BaseHTTPRequestHandler):
             for a in accounts:
                 p = a.get("provider", "openai")
                 if a.get("base_url"): p = detect_provider(a["base_url"])
-                enriched.append({**a, "_color": provider_color(p), "_prov": p})
+                usage = fetch_account_usage(a)
+                enriched.append({**a, "_color": provider_color(p), "_prov": p, "_usage": usage})
             self._json({"accounts": enriched, "active": active, "programs": PROGRAMS})
             return
 
@@ -820,6 +919,11 @@ class Handler(BaseHTTPRequestHandler):
             do_backup(cfg); self._json({"ok": True}); return
         if u.path == "/api/set-auto-backup":
             cfg["auto_backup"] = b.get("enabled", True); save_config(cfg); self._json({"ok": True}); return
+        if u.path == "/api/usage-refresh":
+            aid = b.get("account_id", "")
+            if aid: _USAGE_CACHE.pop(aid, None)
+            else: _USAGE_CACHE.clear()
+            self._json({"ok": True}); return
 
         self.send_error(404)
 
@@ -873,6 +977,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 .ac .ap{font-size:11px;color:var(--tx2);margin-left:auto}
 .ac .am{font-size:11px;color:var(--tx3)}
 .ac .ae{font-size:11px;color:var(--tx3)}
+.ac .ub{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px}
+.ac .ub .ubar{flex:1;height:4px;background:var(--brd);border-radius:2px;overflow:hidden}
+.ac .ub .ufill{height:100%;border-radius:2px;transition:width .3s}
+.ac .ub .ul{font-size:10px;color:var(--tx3);white-space:nowrap}
+.ac .ub .ue{font-size:10px;color:var(--tx3)}
 
 #ppanel{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:16px}
@@ -929,7 +1038,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 <!-- ACCOUNTS -->
 <div id="pg-acc" class="pg on">
   <div id="acc-list">
-    <div class="lh"><h3>Accounts</h3><div style="display:flex;gap:4px"><button class="b bs" onclick="doImport()">Import</button><button class="b bs bp" onclick="openModal('m-create')">+</button></div></div>
+    <div class="lh"><h3>Accounts</h3><div style="display:flex;gap:4px"><button class="b bs" onclick="doImport()">Import</button><button class="b bs" onclick="refreshUsage()">Usage</button><button class="b bs bp" onclick="openModal('m-create')">+</button></div></div>
     <div id="acc-cards"></div>
   </div>
   <div id="ppanel">
@@ -1017,7 +1126,15 @@ function closeModal(id){document.getElementById(id).classList.remove('open')}
 async function loadAccs(){const d=await api('/api/accounts');S.accs=d.accounts;S.active=d.active;S.progs=d.programs;renderAccs()}
 function renderAccs(){const c=document.getElementById('acc-cards');if(!S.accs.length){c.innerHTML='<div class="empty"><p>No accounts. Click Import.</p></div>';return}
 const sorted=[...S.accs].sort((a,b)=>a.name.localeCompare(b.name));
-c.innerHTML=sorted.map(a=>`<div class="ac ${S.sel===a.id?'sel':''}" onclick="selAcc('${a.id}')"><div class="ah"><span class="dot" style="background:${a._color}"></span><span class="an">${a.name}</span><span class="ap">${a._prov}</span></div><div class="am">${a.model||'default'}${a.email?' · '+a.email:''}${a.plan?' · '+a.plan:''}</div></div>`).join('')}
+c.innerHTML=sorted.map(a=>{const u=a._usage;const email=a.email||(u&&u.email)||'';const plan=a.plan||(u&&u.plan)||'';
+return`<div class="ac ${S.sel===a.id?'sel':''}" onclick="selAcc('${a.id}')"><div class="ah"><span class="dot" style="background:${a._color}"></span><span class="an">${a.name}</span><span class="ap">${a._prov}</span></div><div class="am">${a.model||'default'}${email?' · '+email:''}${plan?' · '+plan:''}</div>${usageBarHtml(u)}</div>`}).join('')}
+
+function usageBarHtml(u){if(!u||u.error){if(u&&u.error)return'<div class="ub"><span class="ue">'+u.type+': '+u.error+'</span></div>';return''}
+if(u.type==='codex'){let parts=[];if(u.email)parts.push(u.email);if(u.plan)parts.push(u.plan);if(u.token_expires_in!=null){const h=Math.round(u.token_expires_in/3600);parts.push('token: '+h+'h')}
+if(u.used_pct!=null){const c=u.used_pct>80?'var(--err)':u.used_pct>50?'var(--warn)':'var(--ok)';return'<div class="ub"><span class="ul">codex</span><span class="ubar"><span class="ufill" style="width:'+u.used_pct+'%;background:'+c+'"></span></span><span class="ul">'+u.used_pct+'%</span><span class="ue">'+u.remaining+'</span></div>'}
+return'<div class="ub"><span class="ul">codex</span><span class="ue">'+parts.join(' · ')+'</span></div>'}
+const pct=u.used_pct;if(pct==null)return'';const c=pct>80?'var(--err)':pct>50?'var(--warn)':'var(--ok)';const rem=u.remaining!==undefined?' · '+u.remaining+' left':'';return'<div class="ub"><span class="ul">'+u.type+'</span><span class="ubar"><span class="ufill" style="width:'+pct+'%;background:'+c+'"></span></span><span class="ul">'+pct+'%</span><span class="ue">'+rem+'</span></div>'}
+async function refreshUsage(){await api('/api/usage-refresh',{});loadAccs();toast('Usage refreshed','ok')}
 
 function selAcc(id){S.sel=id;renderAccs();renderProgs()}
 function renderProgs(){document.getElementById('no-sel').style.display='none';document.getElementById('pcon').style.display='block';
