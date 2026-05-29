@@ -173,7 +173,10 @@ def import_accounts():
         oa = claims.get("https://api.openai.com/auth", {})
         email = profile.get("email", "")
         plan = oa.get("chatgpt_plan_type", "")
-    if cx_key and cx_key[:20] not in existing_keys:
+    # Dedup: skip if Codex account already exists (empty api_key, openai provider)
+    has_codex = any(a.get("api_key") == "" and a.get("provider") == "openai" and
+                    a.get("codex_provider") is not None for a in accounts)
+    if cx_key and not has_codex and cx_key[:20] not in existing_keys:
         # Check for model_providers definitions
         mps = cx.get("model_providers", {})
         base_url = ""
