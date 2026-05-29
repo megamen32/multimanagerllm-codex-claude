@@ -10,6 +10,8 @@ MASTER_SKILLS = MASTER_DIR / "skills"
 MASTER_MCP = MASTER_DIR / "mcp.json"
 
 CLAUDE_DESKTOP_DIR = HOME / "Library" / "Application Support"
+CLAUDE_DESKTOP_CFG = CLAUDE_DESKTOP_DIR / "Claude" / "claude_desktop_config.json"
+CLAUDE_DESKTOP_SKILLS = HOME / "Library" / "Application Support" / "Claude" / "skills"
 CC_SETTINGS = HOME / ".claude" / "settings.json"
 CX_CONFIG = HOME / ".codex" / "config.toml"
 CX_AUTH = HOME / ".codex" / "auth.json"
@@ -30,6 +32,10 @@ PROGRAMS = [
     {"id": "claude-code", "name": "Claude Code", "letter": "C",
      "config_path": str(CC_SETTINGS), "type": "json",
      "skills_dir": str(HOME / ".claude" / "skills"),
+     "mcp_key": "mcpServers"},
+    {"id": "claude-desktop", "name": "Claude Desktop", "letter": "D",
+     "config_path": str(CLAUDE_DESKTOP_CFG), "type": "json",
+     "skills_dir": str(CLAUDE_DESKTOP_SKILLS),
      "mcp_key": "mcpServers"},
     {"id": "codex", "name": "Codex", "letter": "X",
      "config_path": str(CX_CONFIG), "type": "toml",

@@ -190,7 +190,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 
 <script>
 let S={accs:[],active:{},sel:null,progs:[]};
-const PI={'claude-code':'C','codex':'X','opencode':'O','cline':'L','roo-code':'R'};
+const PI={'claude-code':'C','claude-desktop':'D','codex':'X','opencode':'O','cline':'L','roo-code':'R'};
 
 function go(p){document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));document.getElementById('pg-'+p).classList.add('on');document.querySelectorAll('.ni').forEach(n=>n.classList.toggle('on',n.dataset.p===p));if(p==='skills')loadSkills();if(p==='mcp')loadMcp();if(p==='set')loadSet();if(p==='progs')loadProgPage()}
 function toast(m,t=''){const e=document.createElement('div');e.className='toast '+(t==='ok'?'ok':t==='er'?'er':'');e.textContent=m;document.getElementById('tc').appendChild(e);setTimeout(()=>e.remove(),4000)}
