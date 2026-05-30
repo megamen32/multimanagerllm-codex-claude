@@ -1,6 +1,7 @@
 """Usage/limit cache with per-provider fetchers."""
 import json, time, urllib.request, urllib.error
-from .settings import CX_AUTH
+from pathlib import Path
+from .settings import CX_AUTH, ANTHROPIC_CREDENTIALS_DIR
 from .settings import decode_jwt
 
 _USAGE_CACHE = {}
@@ -96,6 +97,75 @@ def _fetch_chatgpt_usage(access_token, account_id):
     return result
 
 
+def _fetch_claude_code_usage(api_key, base_url):
+    """Fetch Claude Code usage — try Anthropic billing API or Z.AI proxy."""
+    result = {"type": "claude-code"}
+    url = (base_url.rstrip("/") if base_url else "https://api.anthropic.com")
+    is_proxy = "z.ai" in url or "bigmodel" in url
+    if is_proxy:
+        try:
+            req = urllib.request.Request(
+                url + "/v1/dashboard/billing/usage",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Accept": "application/json",
+                })
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = json.loads(r.read())
+            result["data"] = data
+        except Exception:
+            result["note"] = "quota via MCP"
+        return result
+    try:
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/organizations/me",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Accept": "application/json",
+            })
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        result["org_id"] = data.get("id", "")
+        result["name"] = data.get("name", "")
+        # Try billing endpoint
+        try:
+            req2 = urllib.request.Request(
+                "https://api.anthropic.com/v1/credits",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Accept": "application/json",
+                })
+            with urllib.request.urlopen(req2, timeout=10) as r2:
+                credits = json.loads(r2.read())
+            result["credits"] = credits
+            balance = credits.get("balance", None)
+            if balance is not None:
+                result["balance"] = balance
+        except Exception:
+            pass
+        # Try usage/tokens endpoint
+        try:
+            req3 = urllib.request.Request(
+                "https://api.anthropic.com/v1/usage/tokens",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Accept": "application/json",
+                })
+            with urllib.request.urlopen(req3, timeout=10) as r3:
+                usage = json.loads(r3.read())
+            result["usage"] = usage
+        except Exception:
+            pass
+    except urllib.error.HTTPError as e:
+        result["error"] = f"HTTP {e.code}"
+    except Exception as e:
+        result["error"] = str(e)[:80]
+    return result
+
+
 def fetch_account_usage(account):
     key = account.get("id", "")
     now = time.time()
@@ -145,13 +215,28 @@ def fetch_account_usage(account):
         except Exception as e:
             result = {"type": "openai", "error": str(e)[:80]}
 
-    # Claude Desktop OAuth — show token expiry as "usage"
+    # Claude Desktop OAuth — read fresh from credential files, show token expiry
     elif account.get("claude_oauth_cred"):
+        cred_name = account.get("claude_oauth_cred", "")
         expires_in = account.get("claude_oauth_expires_in", 0)
         has_refresh = account.get("claude_oauth_has_refresh", False)
         email = account.get("claude_oauth_email", "")
-        # Compute remaining percentage (token valid ~24h from issue)
-        total_secs = 86400  # typical Claude Desktop OAuth token lifetime
+        # Try to read fresh from credential file
+        if ANTHROPIC_CREDENTIALS_DIR.exists() and cred_name:
+            cred_file = ANTHROPIC_CREDENTIALS_DIR / f"{cred_name}.json"
+            if cred_file.exists():
+                try:
+                    cred_data = json.loads(cred_file.read_text())
+                    raw_exp = cred_data.get("expires_at", 0) or 0
+                    expires_in = max(0, raw_exp - time.time())
+                    has_refresh = bool(cred_data.get("refresh_token", ""))
+                    if not email:
+                        id_token = cred_data.get("id_token", "")
+                        claims = decode_jwt(id_token) if id_token else {}
+                        email = claims.get("email", "")
+                except Exception:
+                    pass
+        total_secs = 86400
         if expires_in > 0:
             used_pct = round(max(0, min(100, (1 - expires_in / total_secs) * 100)), 1)
         else:
@@ -171,7 +256,7 @@ def fetch_account_usage(account):
             }],
         }
 
-    # Z.AI / GLM — try BigModel balance API
+    # Z.AI / GLM — try BigModel balance API (must come before claude-code since bigmodel URLs detect as anthropic)
     elif ("z.ai" in base_url or "bigmodel" in base_url) and api_key:
         try:
             req = urllib.request.Request(
@@ -184,5 +269,8 @@ def fetch_account_usage(account):
         except Exception:
             result = {"type": "zai", "note": "quota via MCP"}
 
+    # Claude Code (Anthropic API key) — check /v1/messages/count_tokens or billing
+    elif prov == "anthropic" and api_key:
+        result = _fetch_claude_code_usage(api_key, base_url)
     _USAGE_CACHE[key] = {"ts": now, "data": result}
     return result
