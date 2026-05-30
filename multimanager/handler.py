@@ -272,8 +272,9 @@ class Handler(BaseHTTPRequestHandler):
             if path:
                 import subprocess, os
                 p = Path(os.path.expanduser(path))
-                if p.exists():
-                    subprocess.Popen(["open", "-R", str(p.resolve())])
+                target = p if p.exists() else p.parent
+                if target.exists():
+                    subprocess.Popen(["open", "-R", str(target.resolve())])
                     self._json({"ok": True}); return
             self._json({"ok": False, "error": "not found"}); return
 

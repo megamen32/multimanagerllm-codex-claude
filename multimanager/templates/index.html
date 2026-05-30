@@ -277,8 +277,8 @@ c.innerHTML=sorted.map(a=>{const u=a._usage;const email=a.email||(u&&u.email)||'
 return`<div class="ac ${S.sel===a.id?'sel':''}" onclick="selAcc('${a.id}')"><div class="ah"><span class="dot" style="background:${a._color}"></span><span class="an">${a.name}</span><span class="ap">${a._prov}</span></div><div class="am">${a.model|| __('default_model')}${email?' · '+email:''}${plan?' · '+plan:''}</div>${usageBarHtml(u)}</div>`}).join('')}
 
 function usageBarHtml(u){if(!u||u.error){if(u&&u.error)return'<div class="ub"><span class="ue">'+u.type+': '+u.error+'</span></div>';return''}
-if(u.type==='codex'){let html='';if(u.windows&&u.windows.length){u.windows.forEach(w=>{const c=w.used_pct>80?'var(--err)':w.used_pct>50?'var(--warn)':'var(--ok)';html+='<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--tx3);white-space:nowrap">'+w.label+':<span style="color:'+c+';font-weight:500">'+w.used_pct+'%</span></span>'})}
-const pct=u.used_pct;if(pct!=null){const c=pct>80?'var(--err)':pct>50?'var(--warn)':'var(--ok)';return'<div class="ub"><span class="ul">codex</span><span class="ubar"><span class="ufill" style="width:'+pct+'%;background:'+c+'"></span></span>'+html+'</div>'}
+if(u.type==='codex'){const bars=[];if(u.windows&&u.windows.length){u.windows.forEach(w=>{const c=w.used_pct>80?'var(--err)':w.used_pct>50?'var(--warn)':'var(--ok)';bars.push('<span class="ul">'+w.label+'</span><span class="ubar"><span class="ufill" style="width:'+w.used_pct+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+';font-weight:500">'+w.used_pct+'%</span>')})}
+if(bars.length)return'<div class="ub">'+bars.join('')+'</div>'
 if(u.plan||u.email||u.token_expires_in!=null){const parts=[];if(u.email)parts.push(u.email);if(u.plan)parts.push(u.plan);if(u.token_expires_in!=null)parts.push(Math.round(u.token_expires_in/3600)+'h');return'<div class="ub"><span class="ul">codex</span><span class="ue">'+parts.join(' · ')+'</span></div>'}
 return''}
 if(u.type==='claude-desktop'){const h=u.expires_in_hours;const hasR=u.has_refresh;const c=h==null?'var(--err)':h>12?'var(--ok)':h>1?'var(--warn)':'var(--err)';const label=h==null? __('expired'):h>1?Math.round(h)+ __('h'):'<1'+ __('h');return'<div class="ub"><span class="ul">'+ __('token')+'</span><span class="ubar"><span class="ufill" style="width:'+(u.used_pct!=null?u.used_pct:100)+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+'">'+label+'</span>'+(hasR?'<span class="ue">'+ __('refresh_ok')+'</span>':'<span class="ue">'+ __('no_refresh')+'</span>')+'</div>'}
@@ -292,7 +292,7 @@ const pgrid=document.getElementById('pgrid');
 pgrid.innerHTML='<div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:6px"><div style="font-size:12px;font-weight:500;color:var(--tx2)" title="'+ __('write_account')+'">'+ __('apply_to')+' <span style="font-size:10px;color:var(--tx3);font-weight:400">'+ __('write_account')+'</span></div><div style="display:flex;gap:4px"><button class="b bs" onclick="allChk(true)">'+ __('all')+'</button><button class="b bs" onclick="allChk(false)">'+ __('none')+'</button><button class="b bs bp" onclick="applySel()">'+ __('sync_all')+'</button></div></div>'+
 S.progs.map(p=>{
 const aid=S.active[p.id];const isMe=aid===acc.id;const who=isMe?'<span class="at" style="font-size:10px">'+ __('active')+'</span>':aid?S.accs.find(a=>a.id===aid)?.name||aid:'—';
-return`<div class="pc ${isMe?'chk':''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id]||'?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div></div><div class="pa" style="font-size:10px">${who}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isMe?'checked':''}><span>'+ __('apply')+'</span></div></div>`}).join('')}
+return`<div class="pc ${isMe?'chk':''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id]||'?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div></div><div class="pa" style="font-size:10px">${who}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isMe?'checked':''}><span>${__('apply')}</span></div></div>`}).join('')}
 function renderAccDetails(){const acc=S.accs.find(a=>a.id===S.sel);if(!acc)return;
 document.getElementById('ad-dot').style.background=acc._color;
 document.getElementById('ad-name').textContent=acc.name;
@@ -404,7 +404,7 @@ closeModal('m-mcp');toast( __('done'),'ok');loadMcp()}
 async function loadSet(){const c=document.getElementById('set-con');const cfg=await api('/api/get-settings');
 const hLabel=cfg.auto_backup!==false? __('versions_saved'):'';
 c.innerHTML=`<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">${ __('auto_backup')}</div><div style="font-size:11px;color:var(--tx3)">${ __('before_changes')}</div></div><input type="checkbox" ${cfg.auto_backup!==false?'checked':''} onchange="api('/api/set-auto-backup',{enabled:this.checked})"></div></div>
-<div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="api('/api/backup-now',{}).then(()=>toast('${ __('done')}','ok'))">${ __('backup_now')}</button><button class="b" onclick="snapshotNow()">${ __('snapshot')}</button><button class="b bd" onclick="api('/api/shutdown').then(()=>toast('${ __('shutting_down')}'))">${ __('shutdown')}</button></div>
+<div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="doBackupNow()">${ __('backup_now')}</button><button class="b" onclick="snapshotNow()">${ __('snapshot')}</button><button class="b bd" onclick="doShutdown()">${ __('shutdown')}</button></div>
 <details style="margin-bottom:16px"><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${ __('history')} (${hLabel})</summary><div id="hist-list" style="max-height:300px;overflow:auto">${ __('loading')||'Loading...'}</div></details>
 <details><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${ __('raw_config')}</summary><pre style="background:var(--card);padding:12px;border-radius:var(--r);font-size:11px;overflow:auto;max-height:300px;color:var(--tx2)">${JSON.stringify(cfg,null,2)}</pre></details>`;
 loadHistory()}
@@ -421,6 +421,8 @@ return'<div style="display:flex;justify-content:space-between;align-items:center
 '</div>').join('')}
 async function restoreVersion(id){if(!confirm('Restore this version? Current content will be saved first.'))return;
 const r=await api('/api/history-restore',{version_id:id});toast(r.message,r.ok?'ok':'er');loadHistory()}
+async function doBackupNow(){const r=await api('/api/backup-now',{});if(r.ok)toast( __('done'),'ok');else toast(r.error|| __('error'),'er')}
+async function doShutdown(){await api('/api/shutdown');toast( __('shutting_down'));setTimeout(()=>location.reload(),1500)}
 
 // INIT
 document.getElementById('lang-sw').value=S.lang
