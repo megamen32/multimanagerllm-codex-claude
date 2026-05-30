@@ -1,5 +1,6 @@
 """HTTP request handler — all API routes."""
-import json, os, threading, time, uuid
+import json, os, re, threading, time, uuid
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from pathlib import Path
@@ -14,6 +15,84 @@ from .usage import fetch_account_usage, _USAGE_CACHE
 from . import history
 
 _HERE = Path(__file__).parent
+
+
+def _decode_diff_content(text, file_path=""):
+    if not text or file_path.endswith(".toml"):
+        return text
+    try:
+        data = json.loads(text)
+    except Exception:
+        return text
+    changed = _walk_decode(data)
+    if changed:
+        return json.dumps(data, ensure_ascii=False, indent=2)
+    return text
+
+
+def _walk_decode(obj):
+    changed = False
+    if isinstance(obj, dict):
+        for k, v in list(obj.items()):
+            if isinstance(v, str):
+                decoded = _try_decode_value(v, k)
+                if decoded != v:
+                    obj[k + "_decoded"] = decoded
+                    changed = True
+            elif isinstance(v, (int, float)) and _is_ts_key(k):
+                try:
+                    ts = float(v)
+                    if 1_000_000_000 <= ts <= 2_000_000_000:
+                        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+                        obj[k + "_decoded"] = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+                        changed = True
+                except Exception:
+                    pass
+            elif isinstance(v, (dict, list)):
+                if _walk_decode(v):
+                    changed = True
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            if isinstance(v, (dict, list)):
+                if _walk_decode(v):
+                    changed = True
+    return changed
+
+
+def _is_ts_key(k):
+    return any(x in k.lower() for x in ("exp", "iat", "expires", "created_at", "updated_at", "timestamp", "time", "date", "_at"))
+
+
+_UNIX_RE = re.compile(r'^\d{9,10}(\.\d+)?$')
+_B64JWT_RE = re.compile(r'^eyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}$')
+_ISO_TS_RE = re.compile(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}')
+
+
+def _try_decode_value(val, key=""):
+    if not isinstance(val, str):
+        return val
+    if _UNIX_RE.match(val.strip()):
+        try:
+            ts = float(val.strip())
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+            return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+        except Exception:
+            pass
+    if _ISO_TS_RE.match(val.strip()):
+        return val
+    if _B64JWT_RE.match(val.strip()) and val.strip().count('.') >= 2:
+        try:
+            parts = val.strip().split('.')
+            if len(parts) >= 2:
+                payload = parts[1]
+                payload += '=' * (4 - len(payload) % 4)
+                decoded_bytes = __import__('base64').urlsafe_b64decode(payload)
+                decoded_json = json.loads(decoded_bytes)
+                pretty = json.dumps(decoded_json, ensure_ascii=False, indent=2)
+                return pretty
+        except Exception:
+            pass
+    return val
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -412,8 +491,8 @@ class Handler(BaseHTTPRequestHandler):
                 left_title = f"v#{vid}"
             import difflib
             diff = difflib.HtmlDiff(tabsize=2)
-            other_lines = other_content.splitlines()
-            v_lines = v_content.splitlines()
+            other_lines = _decode_diff_content(other_content, str(v_path)).splitlines()
+            v_lines = _decode_diff_content(v_content, str(v_path)).splitlines()
             ctx = 3 if len(other_lines) < 500 else 0
             html = diff.make_table(other_lines, v_lines,
                                    fromdesc=right_title, todesc=left_title,
