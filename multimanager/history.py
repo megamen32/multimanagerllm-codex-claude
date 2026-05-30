@@ -1,23 +1,25 @@
 """SQLite version history for config files — save/restore/snapshot."""
 import json, sqlite3, time, threading
 from pathlib import Path
-from .settings import CONFIG_DIR, PROGRAMS
+from .settings import CONFIG_DIR, get_programs
 
 DB_PATH = CONFIG_DIR / "history.db"
 _lock = threading.Lock()
 
-TRACKED_FILES = [
-    "settings.json" if p["id"] == "claude-code" else
-    "claude_desktop_config.json" if p["id"] == "claude-desktop" else
-    "auth.json" if p["id"] == "codex" else
-    "config.toml" if p["id"] == "codex" else
-    Path(p["config_path"]).name
-    for p in PROGRAMS
-]
-# Add codex auth.json explicitly
-TRACKED_FILES.append("auth.json")
-# Add master config
-TRACKED_FILES.append("config.json")
+
+def _tracked_files():
+    tracked = []
+    for p in get_programs():
+        if p["id"] == "codex":
+            tracked.append("auth.json")
+            tracked.append("config.toml")
+        else:
+            tracked.append(Path(p["config_path"]).name)
+    tracked.append("config.json")
+    return tracked
+
+
+TRACKED_FILES = None
 
 
 def _db():
@@ -102,7 +104,7 @@ def restore_version(version_id):
 def snapshot_all(label=""):
     count = 0
     paths = set()
-    for p in PROGRAMS:
+    for p in get_programs():
         cp = Path(p["config_path"])
         if cp.exists():
             paths.add(str(cp))

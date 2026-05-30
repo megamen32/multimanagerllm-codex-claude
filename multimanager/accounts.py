@@ -61,6 +61,7 @@ def import_from_claude_desktop(cfg, accounts, existing_keys, existing_urls):
                 "claude_oauth_expires_at": exp,
                 "claude_oauth_expires_in": max(0, exp - time.time()) if exp else 0,
                 "claude_oauth_has_refresh": bool(data.get("refresh_token", "")),
+                "source_path": str(f),
             })
             imported.append(name_str)
         except Exception:
@@ -132,6 +133,7 @@ def import_from_cline_roo(cfg, accounts, existing_keys, existing_urls):
                 "anthropic" if api_key.startswith("sk-ant-") else "openai"
             ),
             "api_key": api_key, "base_url": base_url, "model": "",
+            "source_path": str(p),
         })
         imported.append(name_str)
     return imported
@@ -158,7 +160,8 @@ def import_accounts():
         accounts.append({
             "id": uuid.uuid4().hex[:8], "name": name, "provider": "anthropic",
             "api_key": cc_key, "base_url": cc_url, "model": cc_model or "sonnet",
-            "claude_overrides": cc_overrides
+            "claude_overrides": cc_overrides,
+            "source_path": str(CC_SETTINGS),
         })
         imported.append(name)
 
@@ -176,24 +179,44 @@ def import_accounts():
         oa = claims.get("https://api.openai.com/auth", {})
         email = profile.get("email", "")
         plan = oa.get("chatgpt_plan_type", "")
-    # Dedup: skip if Codex account already exists (empty api_key, openai provider)
-    has_codex = any(a.get("api_key") == "" and a.get("provider") == "openai" and
-                    a.get("codex_provider") is not None for a in accounts)
-    if cx_key and not has_codex and cx_key[:20] not in existing_keys:
-        # Check for model_providers definitions
-        mps = cx.get("model_providers", {})
-        base_url = ""
-        codex_provider = cx.get("model_provider", "")
-        if codex_provider and isinstance(mps, dict):
-            mp = mps.get(codex_provider, {})
-            if isinstance(mp, dict): base_url = mp.get("base_url", "")
-        name = f"Codex ({cx_model or 'default'})"
-        accounts.append({
-            "id": uuid.uuid4().hex[:8], "name": name, "provider": "openai",
-            "api_key": "", "base_url": base_url, "model": cx_model,
-            "email": email, "plan": plan, "codex_provider": codex_provider
-        })
-        imported.append(name)
+    # Dedup: check existing codex accounts and compare JWT exp
+    has_codex = None
+    for a in accounts:
+        if a.get("api_key") == "" and a.get("provider") == "openai" and a.get("codex_provider") is not None:
+            has_codex = a
+            break
+    if cx_key:
+        if has_codex is None:
+            if cx_key[:20] not in existing_keys:
+                mps = cx.get("model_providers", {})
+                base_url = ""
+                codex_provider = cx.get("model_provider", "")
+                if codex_provider and isinstance(mps, dict):
+                    mp = mps.get(codex_provider, {})
+                    if isinstance(mp, dict): base_url = mp.get("base_url", "")
+                name = f"Codex ({cx_model or 'default'})"
+                accounts.append({
+                    "id": uuid.uuid4().hex[:8], "name": name, "provider": "openai",
+                    "api_key": "", "base_url": base_url, "model": cx_model,
+                    "email": email, "plan": plan, "codex_provider": codex_provider,
+                    "source_path": str(CX_AUTH),
+                })
+                imported.append(name)
+        else:
+            existing_claims = decode_jwt(tokens.get("access_token", ""))
+            existing_exp = existing_claims.get("exp", 0)
+            current_claims = {}
+            for a in accounts:
+                if a.get("api_key") == "" and a.get("provider") == "openai" and a.get("codex_provider") is not None:
+                    current_claims = decode_jwt(cx_key)
+                    break
+            current_exp = current_claims.get("exp", 0)
+            if current_exp > existing_exp:
+                has_codex["source_path"] = str(CX_AUTH)
+                has_codex["email"] = email
+                has_codex["plan"] = plan
+                if cx_model: has_codex["model"] = cx_model
+                imported.append(has_codex["name"] + " (updated)")
 
     # OpenCode config
     oc = _read_json(OPENCODE_CFG)
@@ -206,7 +229,8 @@ def import_accounts():
                 n = f"OpenCode ({pname})"
                 accounts.append({
                     "id": uuid.uuid4().hex[:8], "name": n, "provider": "openai",
-                    "api_key": key, "base_url": url, "model": ""
+                    "api_key": key, "base_url": url, "model": "",
+                    "source_path": str(OPENCODE_CFG),
                 })
                 imported.append(n)
 
@@ -223,6 +247,11 @@ def import_accounts():
             a["codex_provider"] = cx.get("model_provider", "")
             if email: a["email"] = email
             if plan: a["plan"] = plan
+            migrated = True
+        if not a.get("source_path"):
+            if a.get("claude_oauth_cred"): a["source_path"] = str(ANTHROPIC_CREDENTIALS_DIR / (a["claude_oauth_cred"] + ".json"))
+            elif a.get("codex_provider") is not None: a["source_path"] = str(CX_AUTH)
+            elif a.get("claude_overrides"): a["source_path"] = str(CC_SETTINGS)
             migrated = True
     if migrated:
         save_config(cfg)

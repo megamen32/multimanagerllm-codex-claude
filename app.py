@@ -4,7 +4,7 @@ import socket, threading, webbrowser
 from http.server import ThreadingHTTPServer
 from multimanager.settings import MASTER_SKILLS
 from multimanager.handler import Handler
-from multimanager.menubar import setup_menubar
+from multimanager.menubar import run_menubar
 
 
 def free_port():
@@ -17,10 +17,9 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"[mm] http://127.0.0.1:{port}")
     MASTER_SKILLS.mkdir(parents=True, exist_ok=True)
-    setup_menubar(port)
-    threading.Timer(0.35, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
-    try: server.serve_forever()
-    except KeyboardInterrupt: server.shutdown()
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Timer(0.5, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
+    run_menubar(port)
 
 
 if __name__ == "__main__":

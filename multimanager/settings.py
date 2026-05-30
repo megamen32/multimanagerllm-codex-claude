@@ -28,32 +28,37 @@ APP_NAME = "MultiManager"
 CD_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 CD_OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
 
-PROGRAMS = [
-    {"id": "claude-code", "name": "Claude Code", "letter": "C",
-     "config_path": str(CC_SETTINGS), "type": "json",
-     "skills_dir": str(HOME / ".claude" / "skills"),
-     "mcp_key": "mcpServers"},
-    {"id": "claude-desktop", "name": "Claude Desktop", "letter": "D",
-     "config_path": str(CLAUDE_DESKTOP_CFG), "type": "json",
-     "skills_dir": str(CLAUDE_DESKTOP_SKILLS),
-     "mcp_key": "mcpServers"},
-    {"id": "codex", "name": "Codex", "letter": "X",
-     "config_path": str(CX_CONFIG), "type": "toml",
-     "skills_dir": str(HOME / ".codex" / "skills"),
-     "mcp_key": "mcp_servers"},
-    {"id": "opencode", "name": "OpenCode", "letter": "O",
-     "config_path": str(OPENCODE_CFG), "type": "json",
-     "skills_dir": str(HOME / ".config" / "opencode" / "skills"),
-     "mcp_key": "mcpServers"},
-    {"id": "cline", "name": "Cline", "letter": "L",
-     "config_path": str(CLINE_CFG), "type": "json",
-     "skills_dir": str(HOME / ".cline" / "skills"),
-     "mcp_key": "mcpServers"},
-    {"id": "roo-code", "name": "Roo Code", "letter": "R",
-     "config_path": str(ROO_CFG), "type": "json",
-     "skills_dir": str(HOME / ".roo" / "skills"),
-     "mcp_key": "mcpServers"},
-]
+class _ProgramsList(list):
+    def __init__(self):
+        self._built = False
+
+    def _ensure(self):
+        if not self._built:
+            self._built = True
+            from .programs import all_dicts
+            self.extend(all_dicts())
+
+    def __iter__(self):
+        self._ensure()
+        return super().__iter__()
+
+    def __getitem__(self, key):
+        self._ensure()
+        return super().__getitem__(key)
+
+    def __len__(self):
+        self._ensure()
+        return super().__len__()
+
+    def __bool__(self):
+        self._ensure()
+        return super().__bool__()
+
+PROGRAMS = _ProgramsList()
+
+
+def get_programs():
+    return list(PROGRAMS)
 
 DEFAULT_CONFIG = {
     "accounts": [],

@@ -4,9 +4,10 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from pathlib import Path
 
-from .settings import PROGRAMS, provider_color, detect_provider, MASTER_SKILLS, MASTER_MCP
+from .settings import get_programs, provider_color, detect_provider, MASTER_SKILLS, MASTER_MCP, PROGRAMS
 from .config import ensure_defaults, save_config, do_backup
 from .accounts import import_accounts, detect_active_accounts, apply_account
+from .usage import fetch_account_usage, _USAGE_CACHE
 from .skills import scan_master_skills, scan_all_skill_dirs, sync_skill_to_programs, sync_all_skills, collect_skill_to_master, delete_skill_from_master
 from .mcp_ import scan_master_mcp, save_master_mcp, scan_program_mcp, sync_mcp_to_programs, delete_mcp_from_program
 from .usage import fetch_account_usage, _USAGE_CACHE
@@ -36,6 +37,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(d)
 
+    def _serve_static(self, name, mime):
+        p = _HERE / "templates" / name
+        if not p.exists():
+            self.send_error(404); return
+        d = p.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(d)))
+        self.end_headers()
+        self.wfile.write(d)
+
     def _err(self, msg, s=400):
         self._json({"error": msg}, s)
 
@@ -46,6 +58,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         if u.path == "/": self._html(); return
+        if u.path == "/styles.css": self._serve_static("styles.css", "text/css; charset=utf-8"); return
+        if u.path.startswith("/app.js"): self._serve_static("app.js", "application/javascript; charset=utf-8"); return
         if u.path == "/favicon.ico": self.send_error(204); return
         cfg = ensure_defaults()
 
@@ -112,6 +126,115 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/import":
             names = import_accounts()
             self._json({"imported": names, "total": len(ensure_defaults().get("accounts", []))})
+            return
+        if u.path == "/api/import-file":
+            fp = b.get("file_path", "").strip()
+            if not fp: return self._err("file_path required")
+            p = Path(os.path.expandvars(os.path.expanduser(fp)))
+            if not p.exists(): return self._err("file not found")
+            try:
+                data = json.loads(p.read_text())
+            except Exception:
+                return self._err("invalid json")
+            cfg = ensure_defaults()
+            accounts = cfg.setdefault("accounts", [])
+            imported = []
+            existing_keys = {a.get("api_key", "")[:20] for a in accounts}
+            if "tokens" in data or "OPENAI_API_KEY" in data:
+                tokens = data.get("tokens", {})
+                key = data.get("OPENAI_API_KEY", tokens.get("access_token", ""))
+                if key:
+                    from .settings import decode_jwt
+                    claims = decode_jwt(tokens.get("access_token", ""))
+                    profile = claims.get("https://api.openai.com/profile", {})
+                    oa = claims.get("https://api.openai.com/auth", {})
+                    email = profile.get("email", "")
+                    plan = oa.get("chatgpt_plan_type", "")
+                    if key[:20] not in existing_keys:
+                        accounts.append({
+                            "id": uuid.uuid4().hex[:8],
+                            "name": f"Codex (imported)", "provider": "openai",
+                            "api_key": "", "base_url": "", "model": "",
+                            "email": email, "plan": plan,
+                            "source_path": str(p),
+                        })
+                        imported.append("Codex (imported)")
+            elif "access_token" in data or "refresh_token" in data:
+                from .settings import decode_jwt
+                claims = decode_jwt(data.get("id_token", data.get("access_token", "")))
+                email = claims.get("email", "")
+                exp = data.get("expires_at", 0) or claims.get("exp", 0)
+                name_str = f"Claude Desktop ({email or 'imported'})"
+                if not any(a.get("name") == name_str for a in accounts):
+                    accounts.append({
+                        "id": uuid.uuid4().hex[:8], "name": name_str,
+                        "provider": "anthropic", "api_key": "", "base_url": "",
+                        "model": "", "claude_oauth_cred": p.stem,
+                        "claude_oauth_email": email,
+                        "claude_oauth_expires_at": exp,
+                        "claude_oauth_expires_in": max(0, exp - time.time()) if exp else 0,
+                        "claude_oauth_has_refresh": bool(data.get("refresh_token", "")),
+                        "source_path": str(p),
+                    })
+                    imported.append(name_str)
+            else:
+                env = data.get("env", {})
+                key = env.get("ANTHROPIC_AUTH_TOKEN", "") or env.get("ANTHROPIC_API_KEY", "")
+                if not key:
+                    for k, v in data.items():
+                        if isinstance(v, str) and len(v) > 20 and ("key" in k.lower() or "token" in k.lower()):
+                            key = v
+                            break
+                if key and key[:20] not in existing_keys:
+                    accounts.append({
+                        "id": uuid.uuid4().hex[:8],
+                        "name": f"Imported ({key[:8]}...)", "provider": "openai",
+                        "api_key": key, "base_url": "", "model": "",
+                        "source_path": str(p),
+                    })
+                    imported.append(f"Imported ({key[:8]}...)")
+            save_config(cfg)
+            self._json({"imported": imported, "total": len(accounts)})
+            return
+        if u.path == "/api/refresh-token":
+            aid = b.get("account_id", "")
+            acc = next((a for a in cfg.get("accounts", []) if a["id"] == aid), None)
+            if not acc: return self._err("account not found")
+            if not acc.get("claude_oauth_has_refresh"): return self._err("no refresh token")
+            cred_name = acc.get("claude_oauth_cred", "")
+            if not cred_name: return self._err("no credential name")
+            from .settings import ANTHROPIC_CREDENTIALS_DIR, CD_OAUTH_TOKEN_URL, CD_OAUTH_CLIENT_ID
+            cred_file = ANTHROPIC_CREDENTIALS_DIR / f"{cred_name}.json"
+            if not cred_file.exists(): return self._err("credential file not found")
+            try:
+                cred_data = json.loads(cred_file.read_text())
+                refresh_t = cred_data.get("refresh_token", "")
+                if not refresh_t: return self._err("no refresh_token in file")
+                import urllib.request
+                import urllib.parse
+                rbody = urllib.parse.urlencode({
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_t,
+                    "client_id": CD_OAUTH_CLIENT_ID,
+                }).encode()
+                req = urllib.request.Request(CD_OAUTH_TOKEN_URL, data=rbody, method="POST",
+                    headers={"Content-Type": "application/x-www-form-urlencoded"})
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    result = json.loads(r.read())
+                if result.get("access_token"):
+                    cred_data["access_token"] = result["access_token"]
+                    if result.get("refresh_token"): cred_data["refresh_token"] = result["refresh_token"]
+                    if result.get("expires_in"):
+                        cred_data["expires_at"] = int(time.time()) + result.get("expires_in", 0)
+                    import threading as _thr
+                    _thr.Thread(target=lambda: cred_file.write_text(json.dumps(cred_data, indent=2)), daemon=True).start()
+                    acc["claude_oauth_expires_in"] = result.get("expires_in", 0)
+                    save_config(cfg)
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": "refresh failed"})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)[:80]})
             return
         if u.path == "/api/account-create":
             name = b.get("name", "").strip()
@@ -265,6 +388,49 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/history-snapshot":
             count = history.snapshot_all(b.get("label", ""))
             self._json({"ok": True, "count": count}); return
+        if u.path == "/api/history-diff":
+            vid = b.get("version_id", 0)
+            compare_to = b.get("compare_to", "current")
+            v = history.get_version_content(vid)
+            if not v:
+                return self._err("version not found")
+            v_path = Path(v["file_path"])
+            v_content = v["content"]
+            if compare_to == "current":
+                other_content = v_path.read_text() if v_path.exists() else ""
+                left_title = f"v#{vid}"
+                right_title = "current"
+            else:
+                prev_vers = [x for x in history.get_versions(v["file_path"], 200) if x["id"] != vid]
+                if prev_vers:
+                    pv = history.get_version_content(prev_vers[0]["id"])
+                    other_content = pv["content"] if pv else ""
+                    right_title = f"v#{prev_vers[0]['id']}"
+                else:
+                    other_content = ""
+                    right_title = "(none)"
+                left_title = f"v#{vid}"
+            import difflib
+            diff = difflib.HtmlDiff(tabsize=2)
+            other_lines = other_content.splitlines()
+            v_lines = v_content.splitlines()
+            ctx = 3 if len(other_lines) < 500 else 0
+            html = diff.make_table(other_lines, v_lines,
+                                   fromdesc=right_title, todesc=left_title,
+                                   context=True, numlines=ctx)
+            self._json({"html": html, "left_title": left_title, "right_title": right_title}); return
+
+        # PROGRAM FILES
+        if u.path == "/api/program-files":
+            pid = b.get("program_id", "")
+            from .programs import get
+            prog = get(pid)
+            files = []
+            if prog:
+                files.append({"name": Path(prog.config_path).name, "path": str(prog.config_path), "desc": "config"})
+                for f in prog.extra_files():
+                    files.append(f)
+            self._json({"files": files}); return
 
         # UTILS
         if u.path == "/api/open-folder":

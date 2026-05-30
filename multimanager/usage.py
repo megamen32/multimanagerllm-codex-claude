@@ -244,9 +244,11 @@ def fetch_account_usage(account):
         result = {
             "type": "claude-desktop",
             "used_pct": used_pct,
+            "remaining_pct": round(100 - used_pct, 1) if used_pct is not None else None,
             "email": email,
             "expires_in_seconds": expires_in,
             "expires_in_hours": round(expires_in / 3600, 1) if expires_in > 0 else 0,
+            "token_expires_in": expires_in,
             "has_refresh": has_refresh,
             "windows": [{
                 "label": "token",
