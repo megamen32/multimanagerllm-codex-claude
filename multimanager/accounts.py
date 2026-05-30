@@ -8,6 +8,7 @@ from .settings import (
 )
 from .config import ensure_defaults, save_config, do_backup
 from .toml_utils import parse_toml_simple, write_toml_simple
+from . import history
 
 
 def _read_json(path):
@@ -16,6 +17,7 @@ def _read_json(path):
     except: return {}
 
 def _write_json(path, data):
+    history.save_current(path)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
@@ -26,6 +28,7 @@ def _read_cx():
     if not CX_CONFIG.exists(): return {}
     return parse_toml_simple(CX_CONFIG.read_text())
 def _write_cx(data):
+    history.save_current(CX_CONFIG)
     order = ["model", "model_provider", "model_reasoning_effort", "personality",
              "approval_policy", "sandbox_mode", "notify", "openai_base_url"]
     CX_CONFIG.parent.mkdir(parents=True, exist_ok=True)

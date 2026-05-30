@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from .settings import MASTER_MCP, PROGRAMS
 from .toml_utils import parse_toml_simple
+from . import history
 
 
 def scan_master_mcp():
@@ -42,7 +43,13 @@ def _read_toml_config(path):
 
 def _write_config(path, data):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
+    history.save_current(path)
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+def _write_toml(path, data, order):
+    history.save_current(path)
+    from .toml_utils import write_toml_simple
+    Path(path).write_text(write_toml_simple(data, order))
 
 
 def sync_mcp_to_programs(server_name, server_config, program_ids):
@@ -61,10 +68,9 @@ def sync_mcp_to_programs(server_name, server_config, program_ids):
             d = _read_toml_config(cp)
             mcp = d.setdefault("mcp_servers", {})
             mcp[server_name] = server_config
-            from .toml_utils import write_toml_simple
             order = ["model", "model_provider", "model_reasoning_effort", "personality",
                      "approval_policy", "sandbox_mode", "notify", "openai_base_url"]
-            Path(cp).write_text(write_toml_simple(d, order))
+            _write_toml(cp, d, order)
             results.append(f"{prog['name']}: OK")
     return "; ".join(results)
 
@@ -80,7 +86,6 @@ def delete_mcp_from_program(server_name, program_id):
     elif prog["type"] == "toml":
         d = _read_toml_config(cp)
         d.get("mcp_servers", {}).pop(server_name, None)
-        from .toml_utils import write_toml_simple
         order = ["model", "model_provider", "model_reasoning_effort", "personality",
                  "approval_policy", "sandbox_mode", "notify", "openai_base_url"]
-        Path(cp).write_text(write_toml_simple(d, order))
+        _write_toml(cp, d, order)

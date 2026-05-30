@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# MultiManager .app launcher
+DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
+export PYTHONPATH="$DIR/MultiManager:$PYTHONPATH"
+cd "$DIR/MultiManager" && exec python3 app.py

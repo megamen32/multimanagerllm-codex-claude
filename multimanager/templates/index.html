@@ -83,33 +83,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 #tc{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
 .toast{padding:10px 16px;border-radius:var(--r);background:var(--card);border:1px solid var(--brd2);font-size:13px;animation:si .2s ease;max-width:400px}
 .toast.ok{border-color:var(--ok)}.toast.er{border-color:var(--err)}
+.b:disabled{opacity:.4;pointer-events:none}
 @keyframes si{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 </style></head><body>
 
 <div id="sb">
   <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>MultiManager</div>
   <div style="padding:0 8px;flex:1;display:flex;flex-direction:column;gap:2px">
-    <div class="ni on" data-p="acc" onclick="go('acc')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Accounts</div>
-    <div class="ni" data-p="skills" onclick="go('skills')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>Skills</div>
-    <div class="ni" data-p="mcp" onclick="go('mcp')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M1 12h4m14 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>MCP</div>
+    <div class="ni on" data-p="acc" onclick="go('acc')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-l="accounts">Accounts</span></div>
+    <div class="ni" data-p="skills" onclick="go('skills')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg><span data-l="skills">Skills</span></div>
+    <div class="ni" data-p="mcp" onclick="go('mcp')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M1 12h4m14 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg><span data-l="mcp">MCP</span></div>
     <div class="sep"></div>
-    <div class="ni" data-p="progs" onclick="go('progs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Programs</div>
-    <div class="ni" data-p="set" onclick="go('set')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</div>
+    <div class="ni" data-p="progs" onclick="go('progs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg><span data-l="programs">Programs</span></div>
+    <div class="ni" data-p="set" onclick="go('set')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span data-l="settings">Settings</span></div>
   </div>
-  <div style="padding:8px 16px;font-size:11px;color:var(--tx3)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 4px var(--ok)"></span> Running</div>
+  <div style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;border-top:1px solid var(--brd);margin:0 8px">
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 4px var(--ok)"></span>
+    <span data-l="running" style="font-size:11px;color:var(--tx3)">Running</span>
+    <select id="lang-sw" style="margin-left:auto;padding:2px 4px;font-size:10px;background:var(--card);border:1px solid var(--brd2);border-radius:4px;color:var(--tx3);outline:none" onchange="setLang(this.value)">
+      <option value="ru">RU</option><option value="en">EN</option>
+    </select>
+  </div>
 </div>
 
 <div id="main">
 <!-- ACCOUNTS -->
 <div id="pg-acc" class="pg on">
   <div id="acc-list">
-    <div class="lh"><h3>Accounts</h3><div style="display:flex;gap:4px"><button class="b bs" onclick="doImport()">Import</button><button class="b bs" onclick="refreshUsage()">Usage</button><button class="b bs bp" onclick="openModal('m-create')">+</button></div></div>
+    <div class="lh"><h3 data-l="accounts">Accounts</h3><div style="display:flex;gap:4px"><button class="b bs" onclick="doImport()" data-l="import">Import</button><button class="b bs" onclick="refreshUsage()">Usage</button><button class="b bs bp" onclick="openModal('m-create')">+</button></div></div>
     <div id="acc-cards"></div>
   </div>
   <div id="ppanel" style="gap:0">
-    <div class="empty" id="no-sel"><p>Select an account</p></div>
+    <div class="empty" id="no-sel"><p data-l="select_account">Select an account</p></div>
     <div id="pcon" style="display:none;flex:1;overflow-y:auto;padding:12px 16px">
-      <!-- ACCOUNT DETAILS -->
       <div id="adets" style="margin-bottom:8px;padding:12px;border-radius:var(--rl);border:1px solid var(--brd);background:var(--card)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
@@ -117,13 +123,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
             <span id="ad-name" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="b bs" id="btn-rename" onclick="renameAcc()">✏ Rename</button>
-            <button class="b bs bd" onclick="deleteAcc()">✕ Delete</button>
+            <button class="b bs" id="btn-rename" onclick="renameAcc()">✏ <span data-l="rename">Rename</span></button>
+            <button class="b bs bd" onclick="deleteAcc()">✕ <span data-l="delete">Delete</span></button>
           </div>
         </div>
         <div id="ad-body"></div>
       </div>
-      <!-- PROGRAMS -->
       <div class="pgrid" id="pgrid"></div>
     </div>
   </div>
@@ -132,13 +137,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 <!-- SKILLS -->
 <div id="pg-skills" class="pg">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 12px;flex-wrap:wrap;gap:6px">
-    <div class="pt" style="padding:0">Skills</div>
+    <div class="pt" style="padding:0" data-l="skills">Skills</div>
     <div style="display:flex;gap:6px;align-items:center">
       <select id="sk-import-prog" style="padding:4px 8px;background:var(--card);border:1px solid var(--brd2);border-radius:var(--r);color:var(--tx);font-size:11px;outline:none"></select>
-      <button class="b bs" onclick="importSkillsFromProgram()">Import</button>
-      <button class="b bs" onclick="importSkillsFromFolder()">From Folder</button>
-      <button class="b bs bp" onclick="syncAllSkills()">Sync All</button>
-      <button class="b bs" onclick="loadSkills()">Refresh</button>
+      <button class="b bs" onclick="importSkillsFromProgram()" data-l="import">Import</button>
+      <button class="b bs" onclick="importSkillsFromFolder()" data-l="from_folder">From Folder</button>
+      <button class="b bs bp" onclick="syncAllSkills()" data-l="sync_all">Sync All</button>
+      <button class="b bs" onclick="loadSkills()" data-l="refresh">Refresh</button>
     </div>
   </div>
   <div style="flex:1;overflow:auto;padding:0 24px 20px"><table class="tmat" id="sk-tbl"><thead id="sk-head"></thead><tbody id="sk-body"></tbody></table></div>
@@ -147,51 +152,111 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 <!-- MCP -->
 <div id="pg-mcp" class="pg">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 12px">
-    <div class="pt" style="padding:0">MCP Servers</div>
-    <div style="display:flex;gap:6px"><button class="b bs bp" onclick="syncAllMcp()">Sync All</button><button class="b bs bp" onclick="openModal('m-mcp')">+ Add</button></div>
+    <div class="pt" style="padding:0" data-l="mcp">MCP Servers</div>
+    <div style="display:flex;gap:6px"><button class="b bs bp" onclick="syncAllMcp()" data-l="sync_all">Sync All</button><button class="b bs bp" onclick="openModal('m-mcp')">+ <span data-l="add">Add</span></button></div>
   </div>
   <div style="flex:1;overflow:auto;padding:0 24px 20px"><table class="tmat" id="mcp-tbl"><thead id="mcp-head"></thead><tbody id="mcp-body"></tbody></table></div>
 </div>
 
 <!-- PROGRAMS -->
 <div id="pg-progs" class="pg" style="padding:20px 24px;flex-direction:column">
-  <div class="pt" style="padding:0 0 16px">Programs</div>
+  <div class="pt" style="padding:0 0 16px" data-l="programs">Programs</div>
   <div id="prog-cards" class="pgrid"></div>
   <div id="prog-detail" style="display:none"></div>
 </div>
 
 <!-- SETTINGS -->
 <div id="pg-set" class="pg" style="padding:20px 24px">
-  <div class="pt" style="padding:0 0 16px">Settings</div>
+  <div class="pt" style="padding:0 0 16px" data-l="settings">Settings</div>
   <div id="set-con"></div>
 </div>
 </div>
 
 <!-- MODALS -->
 <div class="mo" id="m-create"><div class="md">
-  <h2>New Account</h2>
-  <div class="fg"><label>Name</label><input id="f-name" placeholder="e.g. Z.AI GLM"></div>
+  <h2 data-l="new_account">New Account</h2>
+  <div class="fg"><label data-l="name">Name</label><input id="f-name" placeholder="e.g. Z.AI GLM"></div>
   <div class="fg"><label>Provider</label><select id="f-prov"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="gemini">Gemini</option><option value="deepseek">DeepSeek</option><option value="mistral">Mistral</option><option value="ollama">Ollama</option><option value="groq">Groq</option><option value="xai">xAI</option></select></div>
   <div class="fg"><label>API Key</label><input id="f-key" type="password" placeholder="sk-..."></div>
-  <div class="fg"><label>Base URL</label><input id="f-url" placeholder="https://api.z.ai/api/anthropic"></div>
-  <div class="fg"><label>Model</label><input id="f-model" placeholder="glm-5.1"></div>
-  <div class="fa"><button class="b" onclick="closeModal('m-create')">Cancel</button><button class="b bp" onclick="createAcc()">Create</button></div>
+  <div class="fg"><label data-l="base_url">Base URL</label><input id="f-url" placeholder="https://api.z.ai/api/anthropic"></div>
+  <div class="fg"><label data-l="model">Model</label><input id="f-model" placeholder="glm-5.1"></div>
+  <div class="fa"><button class="b" onclick="closeModal('m-create')" data-l="cancel">Cancel</button><button class="b bp" onclick="createAcc()" data-l="create">Create</button></div>
 </div></div>
 
 <div class="mo" id="m-mcp"><div class="md">
-  <h2>Add MCP Server</h2>
-  <div class="fg"><label>Name</label><input id="mf-name" placeholder="my-server"></div>
+  <h2 data-l="add_mcp_server">Add MCP Server</h2>
+  <div class="fg"><label data-l="name">Name</label><input id="mf-name" placeholder="my-server"></div>
   <div class="fg"><label>Command</label><input id="mf-cmd" placeholder="npx"></div>
-  <div class="fg"><label>Args (comma)</label><input id="mf-args" placeholder="mcp-server,--flag"></div>
+  <div class="fg"><label data-l="args_comma">Args (comma)</label><input id="mf-args" placeholder="mcp-server,--flag"></div>
   <div class="fg"><label>URL (SSE)</label><input id="mf-url" placeholder="https://..."></div>
-  <div class="fa"><button class="b" onclick="closeModal('m-mcp')">Cancel</button><button class="b bp" onclick="addMcp()">Add</button></div>
+  <div class="fa"><button class="b" onclick="closeModal('m-mcp')" data-l="cancel">Cancel</button><button class="b bp" onclick="addMcp()" data-l="add">Add</button></div>
 </div></div>
 
 <div id="tc"></div>
 
 <script>
-let S={accs:[],active:{},sel:null,progs:[]};
+let S={accs:[],active:{},sel:null,progs:[],lang:navigator.language.startsWith('ru')?'ru':'en'};
 const PI={'claude-code':'C','claude-desktop':'D','codex':'X','opencode':'O','cline':'L','roo-code':'R'};
+
+const L={en:{
+  accounts:'Accounts',skills:'Skills',mcp:'MCP Servers',programs:'Programs',settings:'Settings',
+  running:'Running',
+  import:'Import',from_folder:'From Folder',sync_all:'Sync All',refresh:'Refresh',add:'Add',
+  rename:'Rename',delete:'Delete',select_account:'Select an account',
+  new_account:'New Account',name:'Name',base_url:'Base URL',model:'Model',cancel:'Cancel',create:'Create',
+  add_mcp_server:'Add MCP Server',args_comma:'Args (comma)',
+  no_accounts:'No accounts. Click Import.',
+  apply_to:'Apply to',write_account:'(write account to program)',all:'All',none:'None',apply:'Apply',
+  no_skills:'No skills in master yet.',click_import:'Click to import all skills →',
+  usage:'Usage',backup_now:'Backup Now',snapshot:'Snapshot',shutdown:'Shutdown',
+  auto_backup:'Auto Backup',before_changes:'Before applying changes',history:'History',
+  versions_saved:'versions saved on each change',raw_config:'Raw config',  no_history:'No history yet',loading:'Loading...',
+  restore:'Restore',
+  name_required:'Name required',nothing_selected:'Nothing selected',synced:'synced',errors:'errors',
+  enter_folder:'Enter folder path:',new_name:'New name:',delete_confirm:'Delete this account?',
+  select_programs:'Select programs',
+  default_model:'default',active:'Active',left:'left',expired:'expired',h:'h',
+  config:'Config',file:'File',provider:'Provider',email:'Email',plan:'Plan',
+  api_key:'API Key',source:'Source',token_expires:'Token expires',
+  refresh_ok:'refresh &#10003;',no_refresh:'no refresh',
+  snapshot_done:'Snapshot: {0} files',all_synced:'All synced',done:'Done',
+  imported:'Imported: {0}',no_new_skills:'No new skills',created:'Created: {0}',
+  usage_refreshed:'Usage refreshed',renamed:'Renamed',deleted:'Deleted',
+  shutting_down:'Shutting down',error:'Error',
+  no_refresh_token:'no refresh',token:'token',
+},
+ru:{
+  accounts:'Аккаунты',skills:'Скиллы',mcp:'MCP Серверы',programs:'Программы',settings:'Настройки',
+  running:'Работает',
+  import:'Импорт',from_folder:'Из папки',sync_all:'Синхр. все',refresh:'Обновить',add:'Добавить',
+  rename:'Переимен.',delete:'Удалить',select_account:'Выберите аккаунт',
+  new_account:'Новый аккаунт',name:'Имя',base_url:'Base URL',model:'Модель',cancel:'Отмена',create:'Создать',
+  add_mcp_server:'Добавить MCP сервер',args_comma:'Аргументы (через запятую)',
+  no_accounts:'Нет аккаунтов. Нажмите Импорт.',
+  apply_to:'Применить к',write_account:'(записать в программу)',all:'Все',none:'Ничего',apply:'Применить',
+  no_skills:'В master нет скиллов.',click_import:'Нажмите, чтобы импортировать →',
+  usage:'Использование',backup_now:'Бекап',snapshot:'Снимок',shutdown:'Выключить',
+  auto_backup:'Автобекап',before_changes:'Перед изменениями',history:'История',
+  versions_saved:'версии сохраняются',raw_config:'Конфиг',  no_history:'Истории нет',loading:'Загрузка...',
+  restore:'Восстановить',
+  name_required:'Имя обязательно',nothing_selected:'Ничего не выбрано',synced:'синхр.',errors:'ошибок',
+  enter_folder:'Путь к папке:',new_name:'Новое имя:',delete_confirm:'Удалить этот аккаунт?',
+  select_programs:'Выберите программы',
+  default_model:'по умолч.',active:'Активен',left:'осталось',expired:'истёк',h:'ч',
+  config:'Конфиг',file:'Файл',provider:'Провайдер',email:'Email',plan:'План',
+  api_key:'API Key',source:'Источник',token_expires:'Токен истекает',
+  refresh_ok:'обновление &#10003;',no_refresh:'без обновления',
+  snapshot_done:'Снимок: {0} файлов',all_synced:'Всё синхронизировано',done:'Готово',
+  imported:'Импортировано: {0}',no_new_skills:'Новых скиллов нет',created:'Создан: {0}',
+  usage_refreshed:'Использование обновлено',renamed:'Переименовано',deleted:'Удалено',
+  shutting_down:'Выключение...',error:'Ошибка',
+  no_refresh_token:'без обновления',token:'токен',
+}};
+
+function __(k,...a){let s=(L[S.lang]||L.en)[k];if(s===void 0)s=k;a.forEach((v,i)=>s=s.replace(new RegExp('\\\\{'+i+'\\\\}','g'),v));return s}
+
+function applyLang(){document.querySelectorAll('[data-l]').forEach(el=>{const k=el.dataset.l;const v=__(k);if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')el.placeholder=v;else el.innerHTML=v})}
+function setLang(l){S.lang=l;document.getElementById('lang-sw').value=l;applyLang()}
 
 function go(p){document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));document.getElementById('pg-'+p).classList.add('on');document.querySelectorAll('.ni').forEach(n=>n.classList.toggle('on',n.dataset.p===p));if(p==='skills')loadSkills();if(p==='mcp')loadMcp();if(p==='set')loadSet();if(p==='progs')loadProgPage()}
 function toast(m,t=''){const e=document.createElement('div');e.className='toast '+(t==='ok'?'ok':t==='er'?'er':'');e.textContent=m;document.getElementById('tc').appendChild(e);setTimeout(()=>e.remove(),4000)}
@@ -199,72 +264,69 @@ async function api(p,b=null){const o=b?{method:'POST',headers:{'Content-Type':'a
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-async function renameAcc(){if(!S.sel)return;const acc=S.accs.find(a=>a.id===S.sel);const n=prompt('New name:',acc.name);if(!n||n===acc.name)return;
-const r=await api('/api/account-update',{id:S.sel,name:n});if(r.ok){toast('Renamed','ok');loadAccs()}else toast(r.error||'Error','er')}
-async function deleteAcc(){if(!S.sel)return;if(!confirm('Delete this account?'))return;
-const r=await api('/api/account-delete',{id:S.sel});if(r.ok){toast('Deleted','ok');S.sel=null;loadAccs()}else toast(r.error||'Error','er')}
+async function renameAcc(){if(!S.sel)return;const acc=S.accs.find(a=>a.id===S.sel);const n=prompt( __('new_name'),acc.name);if(!n||n===acc.name)return;
+const r=await api('/api/account-update',{id:S.sel,name:n});if(r.ok){toast( __('renamed'),'ok');loadAccs()}else toast(r.error|| __('error'),'er')}
+async function deleteAcc(){if(!S.sel)return;if(!confirm( __('delete_confirm')))return;
+const r=await api('/api/account-delete',{id:S.sel});if(r.ok){toast( __('deleted'),'ok');S.sel=null;loadAccs()}else toast(r.error|| __('error'),'er')}
 
 // ACCOUNTS
 async function loadAccs(){const d=await api('/api/accounts');S.accs=d.accounts;S.active=d.active;S.progs=d.programs;renderAccs()}
-function renderAccs(){const c=document.getElementById('acc-cards');if(!S.accs.length){c.innerHTML='<div class="empty"><p>No accounts. Click Import.</p></div>';return}
+function renderAccs(){const c=document.getElementById('acc-cards');if(!S.accs.length){c.innerHTML='<div class="empty"><p>'+ __('no_accounts') +'</p></div>';return}
 const sorted=[...S.accs].sort((a,b)=>a.name.localeCompare(b.name));
 c.innerHTML=sorted.map(a=>{const u=a._usage;const email=a.email||(u&&u.email)||'';const plan=a.plan||(u&&u.plan)||'';
-return`<div class="ac ${S.sel===a.id?'sel':''}" onclick="selAcc('${a.id}')"><div class="ah"><span class="dot" style="background:${a._color}"></span><span class="an">${a.name}</span><span class="ap">${a._prov}</span></div><div class="am">${a.model||'default'}${email?' · '+email:''}${plan?' · '+plan:''}</div>${usageBarHtml(u)}</div>`}).join('')}
+return`<div class="ac ${S.sel===a.id?'sel':''}" onclick="selAcc('${a.id}')"><div class="ah"><span class="dot" style="background:${a._color}"></span><span class="an">${a.name}</span><span class="ap">${a._prov}</span></div><div class="am">${a.model|| __('default_model')}${email?' · '+email:''}${plan?' · '+plan:''}</div>${usageBarHtml(u)}</div>`}).join('')}
 
 function usageBarHtml(u){if(!u||u.error){if(u&&u.error)return'<div class="ub"><span class="ue">'+u.type+': '+u.error+'</span></div>';return''}
 if(u.type==='codex'){let html='';if(u.windows&&u.windows.length){u.windows.forEach(w=>{const c=w.used_pct>80?'var(--err)':w.used_pct>50?'var(--warn)':'var(--ok)';html+='<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--tx3);white-space:nowrap">'+w.label+':<span style="color:'+c+';font-weight:500">'+w.used_pct+'%</span></span>'})}
 const pct=u.used_pct;if(pct!=null){const c=pct>80?'var(--err)':pct>50?'var(--warn)':'var(--ok)';return'<div class="ub"><span class="ul">codex</span><span class="ubar"><span class="ufill" style="width:'+pct+'%;background:'+c+'"></span></span>'+html+'</div>'}
 if(u.plan||u.email||u.token_expires_in!=null){const parts=[];if(u.email)parts.push(u.email);if(u.plan)parts.push(u.plan);if(u.token_expires_in!=null)parts.push(Math.round(u.token_expires_in/3600)+'h');return'<div class="ub"><span class="ul">codex</span><span class="ue">'+parts.join(' · ')+'</span></div>'}
 return''}
-if(u.type==='claude-desktop'){const h=u.expires_in_hours;const hasR=u.has_refresh;const c=h==null?'var(--err)':h>12?'var(--ok)':h>1?'var(--warn)':'var(--err)';const label=h==null?'expired':h>1?Math.round(h)+'h':'<1h';return'<div class="ub"><span class="ul">token</span><span class="ubar"><span class="ufill" style="width:'+(u.used_pct!=null?u.used_pct:100)+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+'">'+label+'</span>'+(hasR?'<span class="ue">refresh ✓</span>':'<span class="ue">no refresh</span>')+'</div>'}
-const pct=u.used_pct;if(pct==null)return'';const c=pct>80?'var(--err)':pct>50?'var(--warn)':'var(--ok)';const rem=u.remaining!==undefined?' · '+u.remaining+' left':'';return'<div class="ub"><span class="ul">'+u.type+'</span><span class="ubar"><span class="ufill" style="width:'+pct+'%;background:'+c+'"></span></span><span class="ul">'+pct+'%</span><span class="ue">'+rem+'</span></div>'}
-async function refreshUsage(){await api('/api/usage-refresh',{});loadAccs();toast('Usage refreshed','ok')}
+if(u.type==='claude-desktop'){const h=u.expires_in_hours;const hasR=u.has_refresh;const c=h==null?'var(--err)':h>12?'var(--ok)':h>1?'var(--warn)':'var(--err)';const label=h==null? __('expired'):h>1?Math.round(h)+ __('h'):'<1'+ __('h');return'<div class="ub"><span class="ul">'+ __('token')+'</span><span class="ubar"><span class="ufill" style="width:'+(u.used_pct!=null?u.used_pct:100)+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+'">'+label+'</span>'+(hasR?'<span class="ue">'+ __('refresh_ok')+'</span>':'<span class="ue">'+ __('no_refresh')+'</span>')+'</div>'}
+const pct=u.used_pct;if(pct==null)return'';const c=pct>80?'var(--err)':pct>50?'var(--warn)':'var(--ok)';const rem=u.remaining!==undefined?' · '+u.remaining+' '+ __('left'):'';return'<div class="ub"><span class="ul">'+u.type+'</span><span class="ubar"><span class="ufill" style="width:'+pct+'%;background:'+c+'"></span></span><span class="ul">'+pct+'%</span><span class="ue">'+rem+'</span></div>'}
+async function refreshUsage(){await api('/api/usage-refresh',{});loadAccs();toast( __('usage_refreshed'),'ok')}
 
 function selAcc(id){S.sel=id;renderAccs();renderProgs();renderAccDetails()}
 function renderProgs(){document.getElementById('no-sel').style.display='none';document.getElementById('pcon').style.display='flex';
 const acc=S.accs.find(a=>a.id===S.sel);if(!acc)return;
 const pgrid=document.getElementById('pgrid');
-pgrid.innerHTML='<div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:6px"><div style="font-size:12px;font-weight:500;color:var(--tx2)" title="Write this account\'\s API key, base URL, and model to selected programs\'\ config files">Apply to <span style="font-size:10px;color:var(--tx3);font-weight:400">(write account to program)</span></div><div style="display:flex;gap:4px"><button class="b bs" onclick="allChk(true)">All</button><button class="b bs" onclick="allChk(false)">None</button><button class="b bs bp" onclick="applySel()">Apply</button></div></div>'+
+pgrid.innerHTML='<div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:6px"><div style="font-size:12px;font-weight:500;color:var(--tx2)" title="'+ __('write_account')+'">'+ __('apply_to')+' <span style="font-size:10px;color:var(--tx3);font-weight:400">'+ __('write_account')+'</span></div><div style="display:flex;gap:4px"><button class="b bs" onclick="allChk(true)">'+ __('all')+'</button><button class="b bs" onclick="allChk(false)">'+ __('none')+'</button><button class="b bs bp" onclick="applySel()">'+ __('sync_all')+'</button></div></div>'+
 S.progs.map(p=>{
-const aid=S.active[p.id];const isMe=aid===acc.id;const who=isMe?'<span class="at" style="font-size:10px">Active</span>':aid?S.accs.find(a=>a.id===aid)?.name||aid:'—';
-return`<div class="pc ${isMe?'chk':''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id]||'?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div></div><div class="pa" style="font-size:10px">${who}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isMe?'checked':''}><span>Apply</span></div></div>`}).join('')}
+const aid=S.active[p.id];const isMe=aid===acc.id;const who=isMe?'<span class="at" style="font-size:10px">'+ __('active')+'</span>':aid?S.accs.find(a=>a.id===aid)?.name||aid:'—';
+return`<div class="pc ${isMe?'chk':''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id]||'?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div></div><div class="pa" style="font-size:10px">${who}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isMe?'checked':''}><span>'+ __('apply')+'</span></div></div>`}).join('')}
 function renderAccDetails(){const acc=S.accs.find(a=>a.id===S.sel);if(!acc)return;
 document.getElementById('ad-dot').style.background=acc._color;
 document.getElementById('ad-name').textContent=acc.name;
 const u=acc._usage||{};
-// Build source info
 const parts=[];
 if('codex_provider' in acc)parts.push('import: Codex'+(acc.codex_provider?' ('+acc.codex_provider+')':''));
 if('claude_oauth_cred' in acc)parts.push('import: Claude Desktop OAuth ('+acc.claude_oauth_cred+')');
 if(!('codex_provider' in acc)&&!('claude_oauth_cred' in acc))parts.push('import: manual');
-// Token type
 parts.push('token: '+(acc.claude_oauth_cred?'OAuth (JWT)':acc.api_key&&acc.api_key.startsWith('sk-')?'API Key (sk-)':acc.api_key&&acc.api_key.startsWith('sk-ant-')?'API Key (Anthropic)':acc.api_key?'API Key (custom)':'Codex (ChatGPT OAuth)'));
-// Mask key
 const keyMask=acc.api_key&&!acc.claude_oauth_cred?acc.api_key.slice(0,8)+'...'+acc.api_key.slice(-4):'—';
 const rows=[
-['Provider',acc._prov],
-['Email',acc.email||u.email||(u.type==='codex'?u.email:'')||'—'],
-['Plan',acc.plan||u.plan||(u.type==='codex'?u.plan:'')||'—'],
-['Model',acc.model||'—'],
-['Base URL',acc.base_url||'—'],
-['API Key',keyMask],
-['Source',parts.join('; ')],
+[ __('provider'),acc._prov],
+[ __('email'),acc.email||u.email||(u.type==='codex'?u.email:'')||'—'],
+[ __('plan'),acc.plan||u.plan||(u.type==='codex'?u.plan:'')||'—'],
+[ __('model'),acc.model||'—'],
+[ __('base_url'),acc.base_url||'—'],
+[ __('api_key'),keyMask],
+[ __('source'),parts.join('; ')],
 ];
-if(acc.claude_oauth_expires_in!=null)rows.push(['Token expires',Math.round(acc.claude_oauth_expires_in/3600)+'h ('+(acc.claude_oauth_has_refresh?'refresh ✓':'no refresh')+')']);
+if(acc.claude_oauth_expires_in!=null)rows.push([ __('token_expires'),Math.round(acc.claude_oauth_expires_in/3600)+'h ('+(acc.claude_oauth_has_refresh? __('refresh_ok'): __('no_refresh'))+')']);
 document.getElementById('ad-body').innerHTML='<table style="width:100%;border-collapse:collapse">'+rows.map(r=>`<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">${r[0]}</td><td style="padding:6px 0;font-size:12px;word-break:break-all">${esc(r[1])}</td></tr>`).join('')+'</table>'}
 
 function tglChk(c){const cb=c.querySelector('input[type=checkbox]');cb.checked=!cb.checked;c.classList.toggle('chk',cb.checked)}
 function allChk(v){document.querySelectorAll('#pgrid input[type=checkbox]').forEach(cb=>{cb.checked=v;cb.closest('.pc').classList.toggle('chk',v)})}
 
-async function applySel(){if(!S.sel)return;const pids=[...document.querySelectorAll('#pgrid input:checked')].map(c=>c.value);if(!pids.length){toast('Select programs');return}
+async function applySel(){if(!S.sel)return;const pids=[...document.querySelectorAll('#pgrid input:checked')].map(c=>c.value);if(!pids.length){toast( __('select_programs'));return}
 const r=await api('/api/apply',{account_id:S.sel,programs:pids});
 r.results?.forEach(x=>toast(x.message,x.ok?'ok':'er'));loadAccs()}
 
-async function doImport(){const r=await api('/api/import');toast(`Imported: ${r.imported?.join(', ')||'none'}`,r.imported?.length?'ok':'');loadAccs()}
+async function doImport(){const r=await api('/api/import');toast( __('imported',r.imported?.join(', ')||'none'),r.imported?.length?'ok':'');loadAccs()}
 
-async function createAcc(){const n=document.getElementById('f-name').value.trim();if(!n){toast('Name required','er');return}
+async function createAcc(){const n=document.getElementById('f-name').value.trim();if(!n){toast( __('name_required'),'er');return}
 const r=await api('/api/account-create',{name:n,provider:document.getElementById('f-prov').value,api_key:document.getElementById('f-key').value,base_url:document.getElementById('f-url').value,model:document.getElementById('f-model').value});
-if(r.ok){toast('Created: '+n,'ok');closeModal('m-create');['f-name','f-key','f-url','f-model'].forEach(i=>document.getElementById(i).value='');loadAccs()}else toast(r.error,'er')}
+if(r.ok){toast( __('created',n),'ok');closeModal('m-create');['f-name','f-key','f-url','f-model'].forEach(i=>document.getElementById(i).value='');loadAccs()}else toast(r.error,'er')}
 
 // PROGRAMS
 async function loadProgPage(){const d=await api('/api/programs');renderProgCards(d.programs);renderProgDetail(null)}
@@ -280,12 +342,12 @@ const p=S.progs.find(x=>x.id===id);if(!p){d.innerHTML='';return}
 const files=PROG_FILES[p.id]||[p.type+' config'];
 d.innerHTML='<div style="padding:16px;border-radius:var(--rl);border:1px solid var(--brd);background:var(--card);margin-top:16px"><div style="font-size:14px;font-weight:600;margin-bottom:8px">'+p.name+'</div>'+
 '<table style="width:100%;border-collapse:collapse">'+
-'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">Config</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+esc(p.config_path)+'<button class="b bs" onclick="event.stopPropagation();openFolder(\''+esc(p.config_path)+'\')" style="margin-left:6px;padding:2px 6px">\uD83D\uDCC2</button></td></tr>'+
+'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">'+ __('config')+'</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+esc(p.config_path)+'<button class="b bs" onclick="event.stopPropagation();openFolder(\''+esc(p.config_path)+'\')" style="margin-left:6px;padding:2px 6px">\uD83D\uDCC2</button></td></tr>'+
 files.map(f=>{
 const fname=f.replace(/\([^)]+\)/,'').trim();
 const label=f.includes('(')?f.replace(/\(([^)]+)\)/,'<span style="color:var(--tx3);font-size:10px">($1)</span>'):esc(f);
-return'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">File</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+label+'<button class="b bs" onclick="event.stopPropagation();openFolder(\''+esc(p.config_path).replace(/[^/]+$/,'')+'\')" style="margin-left:6px;padding:2px 6px">\uD83D\uDCC2</button></td></tr>'}).join('')+
-(p.active_account?'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">Active</td><td style="padding:6px 0;font-size:12px">'+esc(p.active_account)+'</td></tr>':'')+
+return'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap;width:1px">'+ __('file')+'</td><td style="padding:6px 0;font-size:12px;word-break:break-all">'+label+'<button class="b bs" onclick="event.stopPropagation();openFolder(\''+esc(p.config_path).replace(/[^/]+$/,'')+'\')" style="margin-left:6px;padding:2px 6px">\uD83D\uDCC2</button></td></tr>'}).join('')+
+(p.active_account?'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">'+ __('active')+'</td><td style="padding:6px 0;font-size:12px">'+esc(p.active_account)+'</td></tr>':'')+
 '<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">Skills</td><td style="padding:6px 0;font-size:12px">'+p.skills_count+'</td></tr>'+
 '<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;white-space:nowrap">MCP</td><td style="padding:6px 0;font-size:12px">'+p.mcp_count+'</td></tr>'+
 '</table></div>'}
@@ -294,44 +356,73 @@ return'<tr><td style="padding:6px 10px 6px 0;color:var(--tx2);font-size:11px;whi
 async function loadSkills(){const d=await api('/api/skills');
 const head=document.getElementById('sk-head');const body=document.getElementById('sk-body');
 const pids=S.progs.map(p=>p.id);const pnames={};S.progs.forEach(p=>pnames[p.id]=p.name);
-// Populate import dropdown
 const sel=document.getElementById('sk-import-prog');sel.innerHTML=S.progs.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-head.innerHTML=`<tr><th>Skill</th>${pids.map(id=>`<th style="text-align:center">${pnames[id]}</th>`).join('')}<th></th></tr>`;
-const rows=d.master.map(sk=>{const checks=pids.map(pid=>{const has=sk.name in Object.fromEntries((d.programs[pid]||[]).map(n=>[n,true]));return`<td style="text-align:center"><input type="checkbox" data-sk="${sk.name}" data-prog="${pid}" ${has?'checked':''}></td>`}).join('');
-return`<tr><td class="sn">${sk.name}${sk.in_master?'<span class="master-tag">master</span>':''}<div class="sd">${sk.has_md?'SKILL.md':'—'}</div></td>${checks}<td><button class="b bs" onclick="syncSkill('${sk.name}')">Sync</button></td></tr>`}).join('');
-if(!rows){const ip=S.progs.map(p=>`<div class="pc" onclick="importSkillsFromProgram('${p.id}')" style="cursor:pointer"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="sd">${p.id}</div></div></div><div style="font-size:11px;color:var(--tx3)">Click to import all skills →</div></div>`).join('');
-body.innerHTML=`<tr><td colspan="99"><div style="padding:20px;text-align:center;color:var(--tx3)">No skills in master yet.</div><div style="padding:0 20px 20px"><div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--tx2)">Import from programs:</div><div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${ip}</div><div style="margin-top:12px;display:flex;gap:8px;align-items:center"><button class="b" onclick="importSkillsFromFolder()">📁 From Folder</button></div></div></td></tr>`}
-else body.innerHTML=rows}
-async function importSkillsFromProgram(pid){if(!pid)pid=document.getElementById('sk-import-prog').value;const r=await api('/api/skills-import-from-program',{program:pid});if(r.imported?.length)toast(`Imported: ${r.imported.join(', ')}`,'ok');else toast('No new skills','');loadSkills()}
-async function importSkillsFromFolder(){const p=prompt('Enter folder path:');if(!p)return;const r=await api('/api/skills-import-from-folder',{folder:p});if(r.imported?.length)toast(`Imported: ${r.imported.join(', ')}`,'ok');else toast('No new skills or folder not found','er');loadSkills()}
+head.innerHTML=`<tr><th>Skill</th>${pids.map(id=>`<th style="text-align:center">${pnames[id]}</th>`).join('')}</tr>`;
+const rows=d.master.map(sk=>{const checks=pids.map(pid=>{const has=sk.name in Object.fromEntries((d.programs[pid]||[]).map(n=>[n,true]));return`<td style="text-align:center"><input type="checkbox" data-sk="${sk.name}" data-prog="${pid}" ${has?'checked':''} onchange="skDirty()"></td>`}).join('');
+return`<tr><td class="sn">${sk.name}${sk.in_master?'<span class="master-tag">master</span>':''}<div class="sd">${sk.has_md?'SKILL.md':'—'}</div></td>${checks}</tr>`}).join('');
+if(!rows){const ip=S.progs.map(p=>`<div class="pc" onclick="importSkillsFromProgram('${p.id}')" style="cursor:pointer"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="sd">${p.id}</div></div></div><div style="font-size:11px;color:var(--tx3)">${ __('click_import')}</div></div>`).join('');
+body.innerHTML=`<tr><td colspan="99"><div style="padding:20px;text-align:center;color:var(--tx3)">${ __('no_skills')}</div><div style="padding:0 20px 20px"><div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--tx2)">${ __('import')}:</div><div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${ip}</div><div style="margin-top:12px;display:flex;gap:8px;align-items:center"><button class="b" onclick="importSkillsFromFolder()">📁 ${ __('from_folder')}</button></div></div></td></tr>`}
+else{body.innerHTML=rows;skDirty()}}
+async function importSkillsFromProgram(pid){if(!pid)pid=document.getElementById('sk-import-prog').value;const r=await api('/api/skills-import-from-program',{program:pid});if(r.imported?.length)toast( __('imported',r.imported.join(', ')),'ok');else toast( __('no_new_skills'),'');loadSkills()}
+async function importSkillsFromFolder(){const p=prompt( __('enter_folder'));if(!p)return;const r=await api('/api/skills-import-from-folder',{folder:p});if(r.imported?.length)toast( __('imported',r.imported.join(', ')),'ok');else toast( __('no_new_skills'),'er');loadSkills()}
 
-async function syncSkill(name){const pids=[...document.querySelectorAll(`input[data-sk="${name}"]:checked`)].map(c=>c.dataset.prog);if(!pids.length){toast('Select programs','er');return}
-const r=await api('/api/skill-sync',{skill:name,programs:pids});toast(r.message,r.ok?'ok':'er')}
-async function syncAllSkills(){const r=await api('/api/skill-sync-all');toast('All synced','ok')}
+function skDirty(){const btn=document.querySelector('#pg-skills [onclick*="syncAllSkills"]');if(!btn)return
+const all=document.querySelectorAll('#sk-body input[type=checkbox]');let dirty=false
+all.forEach(cb=>{if(dirty)return;if(typeof cb.dataset.orig==='string'){if((cb.checked&&cb.dataset.orig==='0')||(!cb.checked&&cb.dataset.orig==='1'))dirty=true}})
+if(!dirty){all.forEach(cb=>{if(typeof cb.dataset.orig!=='string')cb.dataset.orig=cb.checked?'1':'0'})}
+btn.disabled=!dirty}
+async function syncAllSkills(){const rows={};document.querySelectorAll('#sk-body input:checked').forEach(cb=>{const sk=cb.dataset.sk;const pid=cb.dataset.prog;if(!rows[sk])rows[sk]=[];if(!rows[sk].includes(pid))rows[sk].push(pid)});const names=Object.keys(rows);if(!names.length){toast( __('nothing_selected'),'er');return}
+let ok=0,err=0;for(const name of names){const r=await api('/api/skill-sync',{skill:name,programs:rows[name]});if(r.ok)ok++;else err++}
+toast(ok+' '+ __('synced')+(err?' · '+err+' '+ __('errors'):''),err?'er':'ok');loadSkills()}
 
 // MCP
 async function loadMcp(){const d=await api('/api/mcp');
 const head=document.getElementById('mcp-head');const body=document.getElementById('mcp-body');
 const pids=Object.keys(d.program_names);const pnames=d.program_names;
-head.innerHTML=`<tr><th>Server</th>${pids.map(id=>`<th style="text-align:center">${pnames[id]}</th>`).join('')}<th></th></tr>`;
-body.innerHTML=d.servers.map(s=>{const checks=pids.map(pid=>`<td style="text-align:center"><input type="checkbox" data-srv="${s.name}" data-prog="${pid}" ${s.programs[pid]?'checked':''}></td>`).join('');
+head.innerHTML=`<tr><th>Server</th>${pids.map(id=>`<th style="text-align:center">${pnames[id]}</th>`).join('')}</tr>`;
+body.innerHTML=d.servers.map(s=>{const checks=pids.map(pid=>`<td style="text-align:center"><input type="checkbox" data-srv="${s.name}" data-prog="${pid}" ${s.programs[pid]?'checked':''} onchange="mcpDirty()"></td>`).join('');
 const info=s.config?.url||[s.config?.command||'',...(s.config?.args||[])].join(' ');
-return`<tr><td class="sn">${s.name}${s.in_master?'<span class="master-tag">master</span>':''}<div class="sd">${info}</div></td>${checks}<td><button class="b bs" onclick="syncMcp('${s.name}')">Sync</button></td></tr>`}).join('')}
+return`<tr><td class="sn">${s.name}${s.in_master?'<span class="master-tag">master</span>':''}<div class="sd">${info}</div></td>${checks}</tr>`}).join('');
+mcpDirty()}
 
-async function syncMcp(name){const pids=[...document.querySelectorAll(`input[data-srv="${name}"]:checked`)].map(c=>c.dataset.prog);
-const r=await api('/api/mcp-sync',{name:name,programs:pids});toast(r.message||'Synced',r.ok?'ok':'er')}
-async function syncAllMcp(){const r=await api('/api/mcp-sync-all');toast('All synced','ok')}
-async function addMcp(){const name=document.getElementById('mf-name').value.trim();if(!name){toast('Name required','er');return}
+function mcpDirty(){const btn=document.querySelector('#pg-mcp [onclick*="syncAllMcp"]');if(!btn)return
+const all=document.querySelectorAll('#mcp-body input[type=checkbox]');let dirty=false
+all.forEach(cb=>{if(dirty)return;if(typeof cb.dataset.orig==='string'){if((cb.checked&&cb.dataset.orig==='0')||(!cb.checked&&cb.dataset.orig==='1'))dirty=true}})
+if(!dirty){all.forEach(cb=>{if(typeof cb.dataset.orig!=='string')cb.dataset.orig=cb.checked?'1':'0'})}
+btn.disabled=!dirty}
+async function syncAllMcp(){const rows={};document.querySelectorAll('#mcp-body input:checked').forEach(cb=>{const srv=cb.dataset.srv;const pid=cb.dataset.prog;if(!rows[srv])rows[srv]=[];if(!rows[srv].includes(pid))rows[srv].push(pid)});const names=Object.keys(rows);if(!names.length){toast( __('nothing_selected'),'er');return}
+let ok=0,err=0;for(const name of names){const r=await api('/api/mcp-sync',{name,programs:rows[name]});if(r.ok)ok++;else err++}
+toast(ok+' '+ __('synced')+(err?' · '+err+' '+ __('errors'):''),err?'er':'ok');loadMcp()}
+async function addMcp(){const name=document.getElementById('mf-name').value.trim();if(!name){toast( __('name_required'),'er');return}
 const args=document.getElementById('mf-args').value.split(',').map(s=>s.trim()).filter(Boolean);
 const pids=[...document.querySelectorAll(`input[data-srv="${name}"]:checked`)].map(c=>c.dataset.prog);
 await api('/api/mcp-add',{name,command:document.getElementById('mf-cmd').value,args,url:document.getElementById('mf-url').value,programs:pids});
-closeModal('m-mcp');toast('Added','ok');loadMcp()}
+closeModal('m-mcp');toast( __('done'),'ok');loadMcp()}
 
 // SETTINGS
 async function loadSet(){const c=document.getElementById('set-con');const cfg=await api('/api/get-settings');
-c.innerHTML=`<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">Auto Backup</div><div style="font-size:11px;color:var(--tx3)">Before applying changes</div></div><input type="checkbox" ${cfg.auto_backup!==false?'checked':''} onchange="api('/api/set-auto-backup',{enabled:this.checked})"></div></div>
-<div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="api('/api/backup-now').then(()=>toast('Done','ok'))">Backup Now</button><button class="b bd" onclick="api('/api/shutdown').then(()=>toast('Shutting down'))">Shutdown</button></div>
-<details><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">Raw config</summary><pre style="background:var(--card);padding:12px;border-radius:var(--r);font-size:11px;overflow:auto;max-height:300px;color:var(--tx2)">${JSON.stringify(cfg,null,2)}</pre></details>`}
+const hLabel=cfg.auto_backup!==false? __('versions_saved'):'';
+c.innerHTML=`<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">${ __('auto_backup')}</div><div style="font-size:11px;color:var(--tx3)">${ __('before_changes')}</div></div><input type="checkbox" ${cfg.auto_backup!==false?'checked':''} onchange="api('/api/set-auto-backup',{enabled:this.checked})"></div></div>
+<div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="api('/api/backup-now').then(()=>toast('${ __('done')}','ok'))">${ __('backup_now')}</button><button class="b" onclick="snapshotNow()">${ __('snapshot')}</button><button class="b bd" onclick="api('/api/shutdown').then(()=>toast('${ __('shutting_down')}'))">${ __('shutdown')}</button></div>
+<details style="margin-bottom:16px"><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${ __('history')} (${hLabel})</summary><div id="hist-list" style="max-height:300px;overflow:auto">${ __('loading')||'Loading...'}</div></details>
+<details><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${ __('raw_config')}</summary><pre style="background:var(--card);padding:12px;border-radius:var(--r);font-size:11px;overflow:auto;max-height:300px;color:var(--tx2)">${JSON.stringify(cfg,null,2)}</pre></details>`;
+loadHistory()}
+async function snapshotNow(){const r=await api('/api/history-snapshot',{label:'manual'});toast( __('snapshot_done',r.count),'ok')}
+async function loadHistory(){const el=document.getElementById('hist-list');if(!el)return;
+const r=await api('/api/history-list');const v=r.versions||[];
+if(!v.length){el.innerHTML='<div style="color:var(--tx3);font-size:12px">'+ __('no_history')+'</div>';return}
+const groups={};v.forEach(x=>{if(!groups[x.file_path])groups[x.file_path]=[];groups[x.file_path].push(x)})
+el.innerHTML=Object.entries(groups).map(([fp,vers])=>'<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:500;color:var(--tx2);margin-bottom:4px;word-break:break-all">'+esc(fp)+'</div>'+
+vers.slice(0,10).map(x=>{
+const d=new Date(x.created_at*1000);const ts=d.toLocaleString();
+const label=x.label?'<span style="color:var(--tx3);font-size:10px">'+esc(x.label)+'</span>':'';
+return'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;font-size:11px;border-bottom:1px solid var(--brd)"><span>'+ts+' '+label+'</span><button class="b bs" onclick="restoreVersion('+x.id+')">'+ __('restore')+'</button></div>'}).join('')+
+'</div>').join('')}
+async function restoreVersion(id){if(!confirm('Restore this version? Current content will be saved first.'))return;
+const r=await api('/api/history-restore',{version_id:id});toast(r.message,r.ok?'ok':'er');loadHistory()}
 
+// INIT
+document.getElementById('lang-sw').value=S.lang
+applyLang()
 loadAccs();
 </script></body></html>

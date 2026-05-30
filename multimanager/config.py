@@ -2,6 +2,7 @@
 import json
 from datetime import datetime
 from .settings import CONFIG_DIR, CONFIG_FILE, BACKUP_DIR, CC_SETTINGS, CX_CONFIG, CX_AUTH, OPENCODE_CFG, DEFAULT_CONFIG
+from . import history
 
 
 def load_config():
@@ -13,6 +14,8 @@ def load_config():
 
 def save_config(cfg):
     CONFIG_DIR.mkdir(exist_ok=True)
+    if CONFIG_FILE.exists():
+        history.save_current(CONFIG_FILE)
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2))
 
 

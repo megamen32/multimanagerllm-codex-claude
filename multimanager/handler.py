@@ -10,6 +10,7 @@ from .accounts import import_accounts, detect_active_accounts, apply_account
 from .skills import scan_master_skills, scan_all_skill_dirs, sync_skill_to_programs, sync_all_skills, collect_skill_to_master, delete_skill_from_master
 from .mcp_ import scan_master_mcp, save_master_mcp, scan_program_mcp, sync_mcp_to_programs, delete_mcp_from_program
 from .usage import fetch_account_usage, _USAGE_CACHE
+from . import history
 
 _HERE = Path(__file__).parent
 
@@ -45,6 +46,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         if u.path == "/": self._html(); return
+        if u.path == "/favicon.ico": self.send_error(204); return
         cfg = ensure_defaults()
 
         if u.path == "/api/accounts":
@@ -251,6 +253,18 @@ class Handler(BaseHTTPRequestHandler):
             do_backup(cfg); self._json({"ok": True}); return
         if u.path == "/api/set-auto-backup":
             cfg["auto_backup"] = b.get("enabled", True); save_config(cfg); self._json({"ok": True}); return
+
+        # HISTORY
+        if u.path == "/api/history-list":
+            fp = b.get("file_path", "")
+            self._json({"versions": history.get_versions(fp or None, 200)}); return
+        if u.path == "/api/history-restore":
+            vid = b.get("version_id", 0)
+            ok, msg = history.restore_version(vid)
+            self._json({"ok": ok, "message": msg}); return
+        if u.path == "/api/history-snapshot":
+            count = history.snapshot_all(b.get("label", ""))
+            self._json({"ok": True, "count": count}); return
 
         # UTILS
         if u.path == "/api/open-folder":
