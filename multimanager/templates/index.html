@@ -332,7 +332,8 @@ if(r.ok){toast( __('created',n),'ok');closeModal('m-create');['f-name','f-key','
 async function loadProgPage(){const d=await api('/api/programs');renderProgCards(d.programs);renderProgDetail(null)}
 let selProg=null;
 function renderProgCards(progs){const c=document.getElementById('prog-cards');
-c.innerHTML=progs.map(p=>`<div class="pc ${selProg===p.id?'chk':''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account?'\uD83D\uDC1A '+p.active_account:'\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count||0} skills</span><span>\uD83D\uDD17 ${p.mcp_count||0} MCP</span><span>${p.type}</span></div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')}
+const list=progs||S.progs||[];
+ c.innerHTML=list.map(p=>`<div class="pc ${selProg===p.id?'chk':''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter||'?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account?'\uD83D\uDC1A '+p.active_account:'\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count||0} skills</span><span>\uD83D\uDD17 ${p.mcp_count||0} MCP</span><span>${p.type}</span></div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')}
 const PROG_FILES={'claude-code':['settings.json (config)'],'claude-desktop':['claude_desktop_config.json (config)'],'codex':['config.toml (config)','auth.json (OAuth tokens)'],'opencode':['opencode.json (config)'],'cline':['mcp_settings.json (config)'],'roo-code':['mcp_settings.json (config)']};
 function openFolder(path){api('/api/open-folder',{path})}
 function showProg(id){selProg=id;renderProgCards(null);renderProgDetail(id)}
@@ -403,13 +404,13 @@ closeModal('m-mcp');toast( __('done'),'ok');loadMcp()}
 async function loadSet(){const c=document.getElementById('set-con');const cfg=await api('/api/get-settings');
 const hLabel=cfg.auto_backup!==false? __('versions_saved'):'';
 c.innerHTML=`<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">${ __('auto_backup')}</div><div style="font-size:11px;color:var(--tx3)">${ __('before_changes')}</div></div><input type="checkbox" ${cfg.auto_backup!==false?'checked':''} onchange="api('/api/set-auto-backup',{enabled:this.checked})"></div></div>
-<div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="api('/api/backup-now').then(()=>toast('${ __('done')}','ok'))">${ __('backup_now')}</button><button class="b" onclick="snapshotNow()">${ __('snapshot')}</button><button class="b bd" onclick="api('/api/shutdown').then(()=>toast('${ __('shutting_down')}'))">${ __('shutdown')}</button></div>
+<div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="api('/api/backup-now',{}).then(()=>toast('${ __('done')}','ok'))">${ __('backup_now')}</button><button class="b" onclick="snapshotNow()">${ __('snapshot')}</button><button class="b bd" onclick="api('/api/shutdown').then(()=>toast('${ __('shutting_down')}'))">${ __('shutdown')}</button></div>
 <details style="margin-bottom:16px"><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${ __('history')} (${hLabel})</summary><div id="hist-list" style="max-height:300px;overflow:auto">${ __('loading')||'Loading...'}</div></details>
 <details><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${ __('raw_config')}</summary><pre style="background:var(--card);padding:12px;border-radius:var(--r);font-size:11px;overflow:auto;max-height:300px;color:var(--tx2)">${JSON.stringify(cfg,null,2)}</pre></details>`;
 loadHistory()}
 async function snapshotNow(){const r=await api('/api/history-snapshot',{label:'manual'});toast( __('snapshot_done',r.count),'ok')}
 async function loadHistory(){const el=document.getElementById('hist-list');if(!el)return;
-const r=await api('/api/history-list');const v=r.versions||[];
+const r=await api('/api/history-list',{});const v=r.versions||[];
 if(!v.length){el.innerHTML='<div style="color:var(--tx3);font-size:12px">'+ __('no_history')+'</div>';return}
 const groups={};v.forEach(x=>{if(!groups[x.file_path])groups[x.file_path]=[];groups[x.file_path].push(x)})
 el.innerHTML=Object.entries(groups).map(([fp,vers])=>'<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:500;color:var(--tx2);margin-bottom:4px;word-break:break-all">'+esc(fp)+'</div>'+
