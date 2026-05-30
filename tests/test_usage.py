@@ -117,9 +117,13 @@ class TestFetchClaudeCodeUsage(unittest.TestCase):
     @patch("multimanager.usage.urllib.request.urlopen")
     def test_handles_http_error(self, mock_urlopen):
         from urllib.error import HTTPError
-        mock_urlopen.side_effect = HTTPError("url", 403, "", {}, None)
-        mock_urlopen.return_value.__enter__ = lambda self: self
-        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        def make_error_resp():
+            m = MagicMock()
+            m.read.return_value = b""
+            m.__enter__ = MagicMock(return_value=m)
+            m.__exit__ = MagicMock(return_value=False)
+            return m
+        mock_urlopen.side_effect = HTTPError("url", 403, "", {}, make_error_resp())
         result = _fetch_claude_code_usage("bad-key", "")
         self.assertEqual(result["error"], "HTTP 403")
 

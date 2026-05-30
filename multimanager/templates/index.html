@@ -43,8 +43,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 .ac .am{font-size:11px;color:var(--tx3)}
 .ac .ae{font-size:11px;color:var(--tx3)}
 .ac .ub{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px}
-.ac .ub .ubar{flex:1;height:4px;background:var(--brd);border-radius:2px;overflow:hidden}
-.ac .ub .ufill{height:100%;border-radius:2px;transition:width .3s}
+.ac .ub .ubar{flex:1;height:4px;background:var(--brd);border-radius:2px;overflow:hidden;display:block}
+.ac .ub .ufill{height:100%;display:block;border-radius:2px;transition:width .3s}
 .ac .ub .ul{font-size:10px;color:var(--tx3);white-space:nowrap}
 .ac .ub .ue{font-size:10px;color:var(--tx3)}
 
@@ -277,8 +277,8 @@ c.innerHTML=sorted.map(a=>{const u=a._usage;const email=a.email||(u&&u.email)||'
 return`<div class="ac ${S.sel===a.id?'sel':''}" onclick="selAcc('${a.id}')"><div class="ah"><span class="dot" style="background:${a._color}"></span><span class="an">${a.name}</span><span class="ap">${a._prov}</span></div><div class="am">${a.model|| __('default_model')}${email?' · '+email:''}${plan?' · '+plan:''}</div>${usageBarHtml(u)}</div>`}).join('')}
 
 function usageBarHtml(u){if(!u||u.error){if(u&&u.error)return'<div class="ub"><span class="ue">'+u.type+': '+u.error+'</span></div>';return''}
-if(u.type==='codex'){const bars=[];if(u.windows&&u.windows.length){u.windows.forEach(w=>{const c=w.used_pct>80?'var(--err)':w.used_pct>50?'var(--warn)':'var(--ok)';bars.push('<span class="ul">'+w.label+'</span><span class="ubar"><span class="ufill" style="width:'+w.used_pct+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+';font-weight:500">'+w.used_pct+'%</span>')})}
-if(bars.length)return'<div class="ub">'+bars.join('')+'</div>'
+if(u.type==='codex'){const rows=[];if(u.windows&&u.windows.length){u.windows.forEach(w=>{const c=w.used_pct>80?'var(--err)':w.used_pct>50?'var(--warn)':'var(--ok)';rows.push('<div class="ub"><span class="ul">'+w.label+'</span><span class="ubar"><span class="ufill" style="width:'+w.used_pct+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+';font-weight:500">'+w.used_pct+'%</span></div>')})}
+if(rows.length)return'<div style="display:flex;flex-direction:column;gap:2px">'+rows.join('')+'</div>'
 if(u.plan||u.email||u.token_expires_in!=null){const parts=[];if(u.email)parts.push(u.email);if(u.plan)parts.push(u.plan);if(u.token_expires_in!=null)parts.push(Math.round(u.token_expires_in/3600)+'h');return'<div class="ub"><span class="ul">codex</span><span class="ue">'+parts.join(' · ')+'</span></div>'}
 return''}
 if(u.type==='claude-desktop'){const h=u.expires_in_hours;const hasR=u.has_refresh;const c=h==null?'var(--err)':h>12?'var(--ok)':h>1?'var(--warn)':'var(--err)';const label=h==null? __('expired'):h>1?Math.round(h)+ __('h'):'<1'+ __('h');return'<div class="ub"><span class="ul">'+ __('token')+'</span><span class="ubar"><span class="ufill" style="width:'+(u.used_pct!=null?u.used_pct:100)+'%;background:'+c+'"></span></span><span class="ul" style="color:'+c+'">'+label+'</span>'+(hasR?'<span class="ue">'+ __('refresh_ok')+'</span>':'<span class="ue">'+ __('no_refresh')+'</span>')+'</div>'}
